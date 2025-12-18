@@ -1049,11 +1049,11 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				$zp_output = "\t\t\t\t";
 
 				if ( $zp_updateneeded )
-					$zp_output .= '<span class="ZP_UPDATENEEDED ZP_ATTR" style="display:none;">true</span>';
+					$zp_output .= '<span class="ZP_UPDATENEEDED ZP_ATTR" style="display:none !important; visibility:hidden !important; position:absolute !important; left:-9999px !important; width:0 !important; height:0 !important; overflow:hidden !important; font-size:0 !important; line-height:0 !important;">true</span>';
 
 				// $zp_output .= '<span class="ZP_USED_CACHE ZP_ATTR">true</span>';
-				// Store JSON in a script tag to prevent it from being displayed
-				$zp_output .= '<script type="application/json" class="ZP_JSON ZP_ATTR" style="display:none;">'.htmlspecialchars($zp_json_encoded, ENT_QUOTES, 'UTF-8').'</script>';
+				// Store JSON in hidden span - use rawurlencode() because JavaScript expects URL-encoded content for decodeURIComponent()
+				$zp_output .= '<span class="ZP_JSON ZP_ATTR" style="display:none !important; visibility:hidden !important; position:absolute !important; left:-9999px !important; width:0 !important; height:0 !important; overflow:hidden !important; font-size:0 !important; line-height:0 !important;">'.rawurlencode($zp_json_encoded).'</span>';
 				$zp_output .= "\n\n";
 
 				foreach ( $zp_all_the_data as $zp_citation )
