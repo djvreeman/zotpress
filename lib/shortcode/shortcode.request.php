@@ -27,13 +27,22 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 	if ( $zpr === false || $zpr == '' )
 		$zpr = Zotpress_prep_ajax_request_vars($wpdb);
 	
-	// Validate and sanitize collection_id - reject invalid values like "loading"
-	if ( isset($zpr["collection_id"]) && $zpr["collection_id"] !== false && $zpr["collection_id"] !== "" )
+	// Validate and sanitize collection_id - reject invalid values like "loading" or string "false"
+	if ( isset($zpr["collection_id"]) )
 	{
-		$invalid_values = array("loading", "false", "true", "null", "undefined");
-		if ( in_array(strtolower($zpr["collection_id"]), $invalid_values) )
+		// Convert string "false" to boolean false
+		if ( $zpr["collection_id"] === "false" || $zpr["collection_id"] === "False" || $zpr["collection_id"] === "FALSE" )
 		{
 			$zpr["collection_id"] = false;
+		}
+		// Reject other invalid values
+		elseif ( $zpr["collection_id"] !== false && $zpr["collection_id"] !== "" )
+		{
+			$invalid_values = array("loading", "true", "null", "undefined");
+			if ( in_array(strtolower($zpr["collection_id"]), $invalid_values) )
+			{
+				$zpr["collection_id"] = false;
+			}
 		}
 	}
 

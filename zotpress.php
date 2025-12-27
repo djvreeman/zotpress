@@ -75,9 +75,15 @@ if ( ! defined( 'ABSPATH' ) ) {
     define('ZOTPRESS_PLUGIN_URL', plugin_dir_url( ZOTPRESS_PLUGIN_FILE ));
     define('ZOTPRESS_PLUGIN_DIR', dirname( __FILE__ ));
     define('ZOTPRESS_VERSION', '7.4.2' );
+    define('ZOTPRESS_BUILD', '1' ); // Increment this for each build/change
 
     // NOTE: Remember to set to TRUE after dev and before version release
     define('ZOTPRESS_LIVEMODE', true );
+    
+    // Function to get version string with build number for cache busting
+    function zotpress_get_version() {
+        return ZOTPRESS_VERSION . '.' . ZOTPRESS_BUILD;
+    }
 
     $GLOBALS['zp_is_shortcode_displayed'] = false;
     $GLOBALS['zp_shortcode_instances'] = array();
@@ -151,7 +157,7 @@ if ( ! defined( 'ABSPATH' ) ) {
             'zotpress.gutenberg'.$minify.'.js',
             ZOTPRESS_PLUGIN_URL . 'js/zotpress.gutenberg'.$minify.'.js',
             array( 'wp-rich-text', 'wp-element', 'wp-editor', 'jquery' ),
-            '7.4.2',
+            zotpress_get_version(),
             true
         );
     }
@@ -192,23 +198,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 		{
 			wp_enqueue_script( 'jquery' );
 			wp_enqueue_media();
-			wp_enqueue_script( 'jquery.dotimeout.min.js', ZOTPRESS_PLUGIN_URL . 'js/jquery.dotimeout.min.js', array( 'jquery' ), '7.4', true );
+			wp_enqueue_script( 'jquery.dotimeout.min.js', ZOTPRESS_PLUGIN_URL . 'js/jquery.dotimeout.min.js', array( 'jquery' ), zotpress_get_version(), true );
 
 			if ( !in_array( $hook, array('post.php', 'post-new.php') ) )
 			{
-				wp_enqueue_script( 'jquery.livequery.min.js', ZOTPRESS_PLUGIN_URL . 'js/jquery.livequery.min.js', array( 'jquery' ), '7.4', true );
+				wp_enqueue_script( 'jquery.livequery.min.js', ZOTPRESS_PLUGIN_URL . 'js/jquery.livequery.min.js', array( 'jquery' ), zotpress_get_version(), true );
 			}
 
 			if ( isset($_GET['help']) && ($_GET['help'] == 'true') )
 			{
 				wp_enqueue_script( 'jquery-ui-core' );
 				wp_enqueue_script( 'jquery-ui-tabs' );
-				wp_enqueue_style( 'zotpress.help'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.help'.$minify.'.css', array(), '7.4' );
-				wp_enqueue_script( 'zotpress.help.min.js', ZOTPRESS_PLUGIN_URL . 'js/zotpress.help.min.js', array( 'jquery' ), '7.4', true );
+				wp_enqueue_style( 'zotpress.help'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.help'.$minify.'.css', array(), zotpress_get_version() );
+				wp_enqueue_script( 'zotpress.help.min.js', ZOTPRESS_PLUGIN_URL . 'js/zotpress.help.min.js', array( 'jquery' ), zotpress_get_version(), true );
 			}
 
-            wp_enqueue_style( 'zotpress.shortcode'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.shortcode'.$minify.'.css', array(), '7.4' );
-            wp_enqueue_style( 'zotpress.admin'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.admin'.$minify.'.css', array(), '7.4' );
+            wp_enqueue_style( 'zotpress.shortcode'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.shortcode'.$minify.'.css', array(), zotpress_get_version() );
+            wp_enqueue_style( 'zotpress.admin'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.admin'.$minify.'.css', array(), zotpress_get_version() );
 		}
     }
     add_action( 'admin_enqueue_scripts', 'Zotpress_admin_scripts_css' );
@@ -221,7 +227,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 		if ( stripos( $hook, "zotpress" ) !== false )
 		{
-			wp_enqueue_script( 'zotpress.admin'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.admin'.$minify.'.js', array( 'jquery','media-upload','thickbox' ), '7.4', true );
+			wp_enqueue_script( 'zotpress.admin'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.admin'.$minify.'.js', array( 'jquery','media-upload','thickbox' ), zotpress_get_version(), true );
 			wp_localize_script(
 				'zotpress.admin'.$minify.'.js',
 				'zpAccountsAJAX',
@@ -245,7 +251,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			);
 		} // Zotpress pages only
 
-        wp_enqueue_script( 'zotpress.admin.notices'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.admin.notices'.$minify.'.js', array( 'jquery' ), '7.4', true );
+        wp_enqueue_script( 'zotpress.admin.notices'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.admin.notices'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
         wp_localize_script(
         	'zotpress.admin.notices'.$minify.'.js',
         	'zpNoticesAJAX',
@@ -295,8 +301,8 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-        wp_register_style('zotpress.shortcode'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.shortcode'.$minify.'.css', array(), '7.4' );
-        wp_enqueue_style('zotpress.shortcode'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.shortcode'.$minify.'.css', array(), '7.4' );
+        wp_register_style('zotpress.shortcode'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.shortcode'.$minify.'.css', array(), zotpress_get_version() );
+        wp_enqueue_style('zotpress.shortcode'.$minify.'.css', ZOTPRESS_PLUGIN_URL . 'css/zotpress.shortcode'.$minify.'.css', array(), zotpress_get_version() );
     }
     add_action('wp_print_styles', 'Zotpress_theme_includes');
 
@@ -336,13 +342,13 @@ if ( ! defined( 'ABSPATH' ) ) {
         if ( $GLOBALS['zp_is_shortcode_displayed'] === true )
         {
             if ( ! is_admin() ) wp_enqueue_script('jquery');
-            wp_register_script('jquery.livequery.min.js', ZOTPRESS_PLUGIN_URL . 'js/jquery.livequery.min.js', array('jquery'), '7.4', true );
+            wp_register_script('jquery.livequery.min.js', ZOTPRESS_PLUGIN_URL . 'js/jquery.livequery.min.js', array('jquery'), zotpress_get_version(), true );
             wp_enqueue_script('jquery.livequery.min.js');
 
 			wp_enqueue_script("jquery-effects-core");
 			wp_enqueue_script("jquery-effects-highlight");
 
-            wp_enqueue_script( 'zotpress.default'.$minify.'.js', ZOTPRESS_PLUGIN_URL . 'js/zotpress.default'.$minify.'.js', array( 'jquery' ), '7.4', true );
+            wp_enqueue_script( 'zotpress.default'.$minify.'.js', ZOTPRESS_PLUGIN_URL . 'js/zotpress.default'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
         }
     }
     add_action('wp_footer', 'Zotpress_theme_conditional_scripts_footer');
@@ -353,7 +359,7 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-		wp_register_script( 'zotpress.shortcode.bib'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.shortcode.bib'.$minify.'.js', array( 'jquery' ), '7.4', true );
+		wp_register_script( 'zotpress.shortcode.bib'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.shortcode.bib'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
 		wp_localize_script(
 			'zotpress.shortcode.bib'.$minify.'.js',
 			'zpShortcodeAJAX',
@@ -375,7 +381,7 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-		wp_register_script( 'zotpress.dl'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.dl'.$minify.'.js', array( 'jquery' ), '7.4', true );
+		wp_register_script( 'zotpress.dl'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.dl'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
         wp_enqueue_script( 'zotpress.dl'.$minify.'.js' );
 		wp_localize_script(
 			'zotpress.dl'.$minify.'.js',
@@ -395,7 +401,7 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-		wp_register_script( 'zotpress.cite'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.cite'.$minify.'.js', array( 'jquery' ), '7.4', true );
+		wp_register_script( 'zotpress.cite'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.cite'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
         wp_enqueue_script( 'zotpress.cite'.$minify.'.js' );
 		wp_localize_script(
 			'zotpress.cite'.$minify.'.js',
@@ -415,7 +421,7 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-		wp_register_script( 'zotpress.shortcode.intext'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.shortcode.intext'.$minify.'.js', array( 'jquery' ), '7.4', true );
+		wp_register_script( 'zotpress.shortcode.intext'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.shortcode.intext'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
 		wp_localize_script(
 			'zotpress.shortcode.intext'.$minify.'.js',
 			'zpShortcodeAJAX',
@@ -436,8 +442,8 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-		wp_register_script( 'zotpress.lib'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib'.$minify.'.js', array( 'jquery' ), '7.4', true );
-		wp_register_script( 'zotpress.lib.dropdown'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib.dropdown'.$minify.'.js', array( 'jquery' ), '7.4', true );
+		wp_register_script( 'zotpress.lib'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
+		wp_register_script( 'zotpress.lib.dropdown'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib.dropdown'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
 		wp_localize_script(
 			'zotpress.lib.dropdown'.$minify.'.js',
 			'zpShortcodeAJAX',
@@ -470,8 +476,8 @@ if ( ! defined( 'ABSPATH' ) ) {
         // Turn on/off minified versions if testing/live
         $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
 
-		wp_register_script( 'zotpress.lib'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib'.$minify.'.js', array( 'jquery' ), '7.4', true );
-		wp_register_script( 'zotpress.lib.searchbar'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib.searchbar'.$minify.'.js', array( 'jquery' ), '7.4', true );
+		wp_register_script( 'zotpress.lib'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
+		wp_register_script( 'zotpress.lib.searchbar'.$minify.'.js', plugin_dir_url( __FILE__ ) . 'js/zotpress.lib.searchbar'.$minify.'.js', array( 'jquery' ), zotpress_get_version(), true );
 		wp_localize_script(
 			'zotpress.lib.searchbar'.$minify.'.js',
 			'zpShortcodeAJAX',
