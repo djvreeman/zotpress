@@ -388,9 +388,39 @@ if ( ! class_exists('ZotpressRequest') )
                     $http_code = $response["response"]["code"];
                     if ( $http_code == 403 ) {
                         // Check if this is a group account
-                        $is_group = ( strpos( $url, "groups/" ) !== false );
-                        if ( $is_group ) {
-                            $this->request_error = "Access forbidden. For group libraries, ensure your API key has 'Read' or 'Read/Write' permissions for this group. Check your Zotero Settings > Keys and the group's permissions.";
+                        $is_group = ( strpos( $request_url, "groups/" ) !== false );
+                        if ( $is_group && $this->api_key ) {
+                            // For groups, if we get 403 with an API key, try without the key
+                            // Public groups don't require authentication per Zotero API docs
+                            error_log("Zotpress: Got 403 for group with API key, retrying without key (public group may not require auth)");
+                            $headers_arr_no_key = array ( "Zotero-API-Version" => "3" );
+                            if ( count($zp_results) > 0 )
+                                $headers_arr_no_key["If-Modified-Since-Version"] = $zp_results[0]->libver;
+                            
+                            $retry_response = wp_remote_get( $request_url, array ( 'headers' => $headers_arr_no_key ) );
+                            
+                            // Check if retry was successful
+                            if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) && $retry_response["response"]["code"] == 200 ) {
+                                // Success! Public group doesn't need API key - use the retry response
+                                $this->api_key = false; // Clear key for this request
+                                $this->request_error = false;
+                                $response = $retry_response; // Use the successful retry response
+                                $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                            } else {
+                                // Still failed, provide error message
+                                if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) ) {
+                                    $retry_code = $retry_response["response"]["code"];
+                                    if ( $retry_code == 403 ) {
+                                        $this->request_error = "Access forbidden. This group is private and requires an API key with 'Read' or 'Read/Write' permissions. Check your Zotero Settings > Keys and the group's permissions.";
+                                    } else {
+                                        $this->request_error = "HTTP Error {$retry_code}: " . ( isset($retry_response["body"]) ? $retry_response["body"] : "Unknown error" );
+                                    }
+                                } else {
+                                    $this->request_error = "Access forbidden. For group libraries, ensure your API key has 'Read' or 'Read/Write' permissions for this group, or the group is public. Check your Zotero Settings > Keys and the group's permissions.";
+                                }
+                            }
+                        } else if ( $is_group ) {
+                            $this->request_error = "Access forbidden. This group may be private and requires an API key with proper permissions.";
                         } else {
                             $this->request_error = "Access forbidden. Check that your API key has proper permissions.";
                         }
