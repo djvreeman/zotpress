@@ -67,9 +67,63 @@ jQuery(document).ready(function()
 				// First, get encoded/serialized JSON data from PHP:
 				var zp_items = JSON.parse(decodeURIComponent(zp_params.zpJSON));
 				
+				// If loadmore is enabled, limit display to initial batch and track total
+				if ( zp_params.zpLoadMore && zp_items.data && Array.isArray(zp_items.data) ) {
+					console.log('zp: Loadmore enabled, processing cached data. Items in cache:', zp_items.data.length);
+					
+					// Track total items from cached data
+					if ( zp_items.meta && zp_items.meta.request_last > 0 ) {
+						zp_params.zpTotalItems = zp_items.meta.request_last;
+					} else {
+						// If meta doesn't have request_last, use the data length as total
+						// This handles cases where cached data contains all items
+						zp_params.zpTotalItems = zp_items.data.length;
+					}
+					
+					console.log('zp: Total items:', zp_params.zpTotalItems, 'Initial:', zp_params.zpInitial);
+					
+					// Limit data to initial batch for display
+					var initial_count = zp_params.zpInitial || 50;
+					if ( zp_items.data.length > initial_count ) {
+						console.log('zp: Limiting cached data from', zp_items.data.length, 'to', initial_count, 'items');
+						
+						// Limit to initial batch
+						zp_items.data = zp_items.data.slice(0, initial_count);
+						
+						// Check if there are more items to load
+						var next_start = initial_count;
+						var request_last = zp_params.zpTotalItems;
+						
+						// Show Load More button if there are more items
+						if ( next_start < request_last ) {
+							// Set request_next for button display
+							zp_items.meta = zp_items.meta || {};
+							zp_items.meta.request_next = next_start;
+							zp_items.meta.request_last = request_last;
+							console.log('zp: Will show Load More button. Next start:', next_start, 'Total:', request_last);
+						}
+					} else if ( zp_items.data.length < zp_params.zpTotalItems ) {
+						// Cached data has fewer items than total, but we need to show button for remaining
+						var next_start = zp_items.data.length;
+						var request_last = zp_params.zpTotalItems;
+						
+						if ( next_start < request_last ) {
+							zp_items.meta = zp_items.meta || {};
+							zp_items.meta.request_next = next_start;
+							zp_items.meta.request_last = request_last;
+							console.log('zp: Cached data is partial. Will show Load More button. Next start:', next_start, 'Total:', request_last);
+						}
+					}
+				}
+				
 				// Then (re)format:
 				zp_bib_reformat( $instance, zp_items, zp_params );
 				console.log('---');
+				
+				// If loadmore is enabled and there are more items, show Load More button
+				if ( zp_params.zpLoadMore && zp_items.meta && zp_items.meta.request_next !== false && zp_items.meta.request_next !== "false" ) {
+					zp_update_loadmore_button( $instance, zp_params, zp_items.meta.request_next, zp_items.meta.request_last );
+				}
 
 				// Second, check for updates and update, if needed:
 				// TEST: Big changes
