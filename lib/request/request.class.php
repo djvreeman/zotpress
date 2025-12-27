@@ -23,7 +23,8 @@ if ( ! class_exists('ZotpressRequest') )
                 $api_user_id,
                 $api_key = false,
                 $cleaned_url = false,
-                $request_type = 'item';
+                $request_type = 'item',
+                $account_type = false; // 'users' or 'groups'
 
         // REVIEW: This was causing problems for some people ...
         // Could it be how the database is set up?
@@ -66,14 +67,18 @@ if ( ! class_exists('ZotpressRequest') )
                 }
             }
 
-            // Get and set api user id
+            // Get and set api user id and account type
             // Check for groups first, then users
             $divider = "users/";
             if ( strpos( $url, "groups/" ) !== false ) {
                 $divider = "groups/";
-            } elseif ( strpos( $url, "users/" ) === false ) {
+                $this->account_type = "groups";
+            } elseif ( strpos( $url, "users/" ) !== false ) {
+                $this->account_type = "users";
+            } else {
                 // If neither found, log error and default to users
                 error_log("Zotpress: Could not determine account type from URL: " . $url);
+                $this->account_type = "users";
             }
             $temp1 = explode( $divider, $url );
             if ( isset($temp1[1]) ) {
@@ -365,8 +370,8 @@ if ( ! class_exists('ZotpressRequest') )
                     || ( isset($zp_results[0]->retrieved)
                             && $this->check_time($zp_results[0]->retrieved) ) )
             {
-                // Check if this is a group account - public groups don't require API keys
-                $is_group = ( strpos( $request_url, "groups/" ) !== false );
+                // Check if this is a group account - use stored account_type for reliable detection
+                $is_group = ( $this->account_type === "groups" );
                 
                 $headers_arr = array ( "Zotero-API-Version" => "3" );
 
@@ -394,9 +399,9 @@ if ( ! class_exists('ZotpressRequest') )
                 else if ( isset($response["response"]["code"]) ) {
                     $http_code = $response["response"]["code"];
                     if ( $http_code == 403 ) {
-                        // Check if this is a group account - check both request_url and original url
-                        $is_group = ( strpos( $request_url, "groups/" ) !== false ) || ( strpos( $url, "groups/" ) !== false );
-                        error_log("Zotpress: 403 error - request_url: " . $request_url . ", original url: " . $url . ", Is Group: " . ($is_group ? "Yes" : "No") . ", Has API Key: " . ($this->api_key ? "Yes" : "No"));
+                        // Check if this is a group account - use stored account_type for reliable detection
+                        $is_group = ( $this->account_type === "groups" );
+                        error_log("Zotpress: 403 error - account_type: " . $this->account_type . ", request_url: " . $request_url . ", Is Group: " . ($is_group ? "Yes" : "No") . ", Has API Key: " . ($this->api_key ? "Yes" : "No"));
                         if ( $is_group && $this->api_key ) {
                             // For groups, if we get 403 with an API key, try without the key
                             // Public groups don't require authentication per Zotero API docs
