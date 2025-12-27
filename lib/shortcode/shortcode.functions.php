@@ -725,6 +725,22 @@ function Zotpress_prep_ajax_request_vars($wpdb, $atts=false, $is_zplib=false) {
 	if ( $is_zplib) $zpr["maxresults"] = 50;
 	if ( isset($atts['maxresults']) )
 		$zpr["maxresults"] = (int) sanitize_text_field(wp_strip_all_tags($atts['maxresults']));
+	
+	// Load More pagination (7.4.3)
+	$zpr["loadmore"] = 'no';
+	if ( isset($atts['loadmore']) 
+			&& in_array(strtolower($atts['loadmore']), array('yes', 'true', '1')) )
+		$zpr["loadmore"] = 'yes';
+	
+	$zpr["initial"] = 50; // Default initial items to show
+	if ( isset($atts['initial']) 
+			&& (int) $atts['initial'] > 0 )
+		$zpr["initial"] = (int) sanitize_text_field(wp_strip_all_tags($atts['initial']));
+	
+	// If loadmore is enabled, set limit to initial value for first load
+	if ( $zpr["loadmore"] == 'yes' && ! isset($atts['limit']) ) {
+		$zpr["limit"] = $zpr["initial"];
+	}
 
 	// Term, filter
 	$zpr["term"] = false;

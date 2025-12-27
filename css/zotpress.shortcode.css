@@ -297,6 +297,47 @@ a.zp-DownloadURL:after {
     -ms-user-select: none;      /* IE 10+ */
     user-select: none;
 }
+/* Load More Button (7.4.3) */
+.zp-LoadMore-Container {
+    margin: 2em 0;
+    text-align: center;
+    padding: 1.5em 0;
+    border-top: 1px solid #ddd;
+}
+
+.zp-LoadMore-Status {
+    margin: 0 0 1em 0;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.zp-LoadMore-Status strong {
+    color: #000;
+    font-weight: bold;
+}
+
+.zp-LoadMore-Button {
+    background-color: #0073aa;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 0.75em 2em;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    transition: background-color 0.2s ease;
+}
+
+.zp-LoadMore-Button:hover:not(:disabled) {
+    background-color: #005a87;
+}
+
+.zp-LoadMore-Button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .zpSearchResultsPagingScroller span:active {
     opacity: 0.2;
 }

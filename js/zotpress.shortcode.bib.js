@@ -29,6 +29,9 @@ jQuery(document).ready(function()
 			zp_params.zpStyle = false; if ( jQuery(".ZP_STYLE", $instance).text().trim().length > 0 ) zp_params.zpStyle = jQuery(".ZP_STYLE", $instance).text();
 			zp_params.zpLimit = false; if ( jQuery(".ZP_LIMIT", $instance).text().trim().length > 0 ) zp_params.zpLimit = jQuery(".ZP_LIMIT", $instance).text();
 			zp_params.zpTitle = false; if ( jQuery(".ZP_TITLE", $instance).text().trim().length > 0 ) zp_params.zpTitle = jQuery(".ZP_TITLE", $instance).text();
+			zp_params.zpLoadMore = false; if ( jQuery(".ZP_LOADMORE", $instance).text().trim().length > 0 && jQuery(".ZP_LOADMORE", $instance).text().toLowerCase() == 'yes' ) zp_params.zpLoadMore = true;
+			zp_params.zpInitial = 50; if ( jQuery(".ZP_INITIAL", $instance).text().trim().length > 0 ) zp_params.zpInitial = parseInt(jQuery(".ZP_INITIAL", $instance).text()) || 50;
+			zp_params.zpTotalItems = 0; // Track total items for loadmore display
 
 			zp_params.zpShowImages = false; if ( jQuery(".ZP_SHOWIMAGE", $instance).text().trim().length > 0 ) zp_params.zpShowImages = jQuery(".ZP_SHOWIMAGE", $instance).text().trim();
 			zp_params.zpShowTags = false; if ( jQuery(".ZP_SHOWTAGS", $instance).text().trim().length > 0 ) zp_params.zpShowTags = true;
@@ -499,13 +502,28 @@ jQuery(document).ready(function()
 						// Re-sort, if needed
 						zp_bib_reformat( $instance, zp_items, params );
 
+						// Track total items for loadmore display (from first response)
+						if ( params.zpLoadMore && params.zpTotalItems == 0 && zp_items.meta.request_last > 0 ) {
+							params.zpTotalItems = zp_items.meta.request_last;
+						}
+
 						// Then, continue with other requests, if they exist:
+						// BUT: If loadmore is enabled, stop auto-loading and show Load More button instead
 						if ( zp_items.meta.request_next != false
 								&& zp_items.meta.request_next != "false" )
 						{
-							// params: request_start, request_last, $instance, params, update
-							// TEST: kept update as var
-							zp_get_items ( zp_items.meta.request_next, zp_items.meta.request_last, $instance, params, update );
+							if ( params.zpLoadMore ) {
+								// Load More mode: Stop auto-loading and show/update button
+								zp_update_loadmore_button( $instance, params, zp_items.meta.request_next, zp_items.meta.request_last );
+							} else {
+								// Normal mode: Continue auto-loading
+								// params: request_start, request_last, $instance, params, update
+								// TEST: kept update as var
+								zp_get_items ( zp_items.meta.request_next, zp_items.meta.request_last, $instance, params, update );
+							}
+						} else if ( params.zpLoadMore ) {
+							// No more items, hide Load More button if it exists
+							jQuery("#"+zp_items.instance+" .zp-LoadMore-Container").remove();
 						}
 						else // Otherwise, finish up the initial request(s):
 						{
@@ -579,6 +597,50 @@ jQuery(document).ready(function()
 		});
 
 	} // function zp_get_items
+
+
+	// Load More button functionality (7.4.3)
+	function zp_update_loadmore_button( $instance, params, request_next, request_last )
+	{
+		var instance_id = $instance.attr("id");
+		var $container = jQuery("#"+instance_id+" .zp-LoadMore-Container");
+		
+		// Count currently displayed items
+		var displayed_count = jQuery("#"+instance_id+" .zp-List .zp-Entry").length;
+		var total_count = params.zpTotalItems || request_last || displayed_count;
+		
+		if ( $container.length > 0 ) {
+			// Update existing button
+			$container.find('.zp-LoadMore-Status').html('Displaying <strong>' + displayed_count + '</strong> out of <strong>' + total_count + '</strong> total entries.');
+			$container.find('.zp-LoadMore-Button')
+				.data('request-next', request_next)
+				.data('request-last', request_last)
+				.prop('disabled', false)
+				.text('Load More');
+		} else {
+			// Create new Load More container
+			var loadmore_html = '<div class="zp-LoadMore-Container">';
+			loadmore_html += '<p class="zp-LoadMore-Status">Displaying <strong>' + displayed_count + '</strong> out of <strong>' + total_count + '</strong> total entries.</p>';
+			loadmore_html += '<button class="zp-LoadMore-Button" data-request-next="' + request_next + '" data-request-last="' + request_last + '">Load More</button>';
+			loadmore_html += '</div>';
+			
+			// Append after the list
+			jQuery("#"+instance_id+" .zp-List").after(loadmore_html);
+			
+			// Add click handler (use event delegation to handle dynamically added buttons)
+			jQuery("#"+instance_id).on('click', '.zp-LoadMore-Button', function() {
+				var $button = jQuery(this);
+				var next_start = $button.data('request-next');
+				var next_last = $button.data('request-last');
+				
+				// Disable button and show loading
+				$button.prop('disabled', true).text('Loading...');
+				
+				// Load next batch
+				zp_get_items( next_start, next_last, $instance, params, false );
+			});
+		}
+	}
 
 
 	function zp_bib_reformat( $instance, zp_items, zp_params )

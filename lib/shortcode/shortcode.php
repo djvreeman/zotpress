@@ -52,6 +52,8 @@ function Zotpress_func( $atts ) {
 
         'style' => false,
         'limit' => false,
+        'loadmore' => 'no', // 7.4.3: Enable "Load More" pagination for large libraries
+        'initial' => 50, // 7.4.3: Number of items to show initially when loadmore is enabled
 
         'sortby' => 'default',
         'order' => false,
@@ -510,6 +512,8 @@ function Zotpress_func( $atts ) {
 		<span class="ZP_INCLUSIVE ZP_ATTR" style="display:none;">'.$zpr['inclusive'].'</span>
 		<span class="ZP_STYLE ZP_ATTR" style="display:none;">'.$zpr['style'].'</span>
 		<span class="ZP_LIMIT ZP_ATTR" style="display:none;">'.$zpr['limit'].'</span>
+		<span class="ZP_LOADMORE ZP_ATTR" style="display:none;">'.$zpr['loadmore'].'</span>
+		<span class="ZP_INITIAL ZP_ATTR" style="display:none;">'.$zpr['initial'].'</span>
 		<span class="ZP_SORTBY ZP_ATTR" style="display:none;">'.$zpr['sortby'].'</span>
 		<span class="ZP_ORDER ZP_ATTR" style="display:none;">'.$zpr['order'].'</span>
 		<span class="ZP_TITLE ZP_ATTR" style="display:none;">'.$zpr['title'].'</span>
