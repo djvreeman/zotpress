@@ -479,6 +479,14 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		// $temp_data = json_encode( (array)$zp_request["json"] );
 		// $temp_data = json_decode( str_replace('\u0000*\u0000','', $temp_data) );
 		$temp_data = json_decode( $zp_request["json"] );
+		
+		// Handle cases where json_decode returns null or false (invalid JSON, empty response, etc.)
+		// This can happen with the last partial batch or if there's an error
+		if ( $temp_data === null || $temp_data === false ) {
+			error_log("Zotpress: json_decode returned null/false for request_start=" . $zpr["request_start"] . ", limit=" . $zpr["limit"]);
+			// Set to empty array to prevent errors
+			$temp_data = array();
+		}
 
 		// Figure out if there's multiple requests and how many
 		// if ( $zpr["request_start"] == 0
@@ -505,10 +513,23 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		
 		// Figure out the next starting position for the next request, if any
 		// 7.3.3: Changed from >= to >
-		if ( $zp_request_meta["request_last"] >= ($zpr["request_start"] + $zpr["limit"]) ) {
-
+		// Also check if we actually received fewer items than requested (partial batch)
+		$items_received = is_array($temp_data) ? count($temp_data) : (is_object($temp_data) ? 1 : 0);
+		$expected_items = $zpr["limit"];
+		
+		// If we received fewer items than requested, this is likely the last batch
+		if ( $items_received > 0 && $items_received < $expected_items ) {
+			// This is a partial batch - likely the last one
+			// Don't set request_next, as there are no more items
+			$zp_request_meta["request_next"] = false;
+			error_log("Zotpress: Partial batch detected - received " . $items_received . " items (expected " . $expected_items . ") at start=" . $zpr["request_start"]);
+		} elseif ( $zp_request_meta["request_last"] >= ($zpr["request_start"] + $zpr["limit"]) ) {
+			// Full batch received, check if there are more items
 			// 7.3.9: Only if next is greater than limit
 			$zp_request_meta["request_next"] = $zpr["request_start"] + $zpr["limit"];
+		} else {
+			// No more items
+			$zp_request_meta["request_next"] = false;
 		}
 
 		// Overwrite request if limit
@@ -538,23 +559,38 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		// | Format the data |
 		// +-----------------+
 
-		if ( count($temp_data) > 0 )
+		// Ensure $temp_data is an array and has items
+		// Handle partial batches (e.g., last batch with fewer items than limit)
+		if ( ! is_array($temp_data) && ! is_object($temp_data) ) {
+			$temp_data = array();
+		}
+		
+		// Convert object to array if needed
+		if ( is_object($temp_data) ) {
+			$temp = $temp_data;
+			$temp_data = array();
+			$temp_data[0] = $temp;
+		}
+		
+		// Now check if we have any data to process
+		if ( is_array($temp_data) && count($temp_data) > 0 )
 		{
-			// If single, place the object into an array
-			if ( gettype($temp_data) == "object" )
-			{
-				$temp = $temp_data;
-				$temp_data = array();
-				$temp_data[0] = $temp;
-			}
 
 			// Set up conditional vars
 			if ( $zpr["shownotes"] ) $zp_notes_num = 1;
 			if ( $zpr["showimage"] ) $zp_showimage_keys = "";
 
 			// Get individual items
+			// Wrap in try-catch to handle any issues with individual items in partial batches
 			foreach ( $temp_data as $item )
 			{
+				// Skip if item is null or invalid
+				if ( ! is_object($item) || ! isset($item->key) ) {
+					error_log("Zotpress: Skipping invalid item in batch at start=" . $zpr["request_start"]);
+					continue;
+				}
+				
+				try {
 				// Set target for links
 				$zp_target_output = "";
 				if ( $zpr["target"] )
@@ -981,6 +1017,13 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				} // $zpr["downloadable"]
 
 				$zp_all_the_data[] = $item;
+				
+				} catch ( Exception $e ) {
+					// Log the error but continue processing other items
+					error_log("Zotpress: Error processing item " . (isset($item->key) ? $item->key : 'unknown') . " in batch at start=" . $zpr["request_start"] . ": " . $e->getMessage());
+					// Continue to next item instead of failing entire batch
+					continue;
+				}
 
 			} // foreach item
 
