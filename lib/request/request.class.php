@@ -615,20 +615,67 @@ if ( ! class_exists('ZotpressRequest') )
                                 
                                 // 7.4 Update: Might not exist
                                 if ( isset($item->key) )
+                                {
                                     $tags[$item->key] = "";
 
-                                if ( property_exists($data[$id], 'data')
-                                        && property_exists($data[$id]->data, 'tags') )
-                                {
-                                    $tags[$item->key] = $data[$id]->data->tags;
-                                    unset($data[$id]->data->tags);
+                                    // Handle tags with special characters (e.g., ® symbol)
+                                    // Wrap in try-catch to prevent 500 errors from encoding issues
+                                    try {
+                                        if ( property_exists($data[$id], 'data')
+                                                && property_exists($data[$id]->data, 'tags') )
+                                        {
+                                            // Ensure tags are properly encoded as UTF-8
+                                            if ( is_array($data[$id]->data->tags) ) {
+                                                // Process each tag to ensure UTF-8 encoding
+                                                $processed_tags = array();
+                                                foreach ( $data[$id]->data->tags as $tag_obj ) {
+                                                    if ( is_object($tag_obj) && property_exists($tag_obj, 'tag') ) {
+                                                        // Ensure the tag string is UTF-8 encoded
+                                                        $tag_str = mb_convert_encoding($tag_obj->tag, 'UTF-8', 'UTF-8');
+                                                        $processed_tags[] = (object) array('tag' => $tag_str);
+                                                    } else {
+                                                        $processed_tags[] = $tag_obj;
+                                                    }
+                                                }
+                                                $tags[$item->key] = $processed_tags;
+                                            } else {
+                                                $tags[$item->key] = $data[$id]->data->tags;
+                                            }
+                                            unset($data[$id]->data->tags);
+                                        }
+                                    } catch ( Exception $e ) {
+                                        // Log the error but don't fail the entire request
+                                        error_log("Zotpress: Error processing tags for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
+                                        // Set empty tags array to prevent further errors
+                                        $tags[$item->key] = array();
+                                    }
                                 }
                             }
 
-                            $json = wp_json_encode($data);
-                            $tags = wp_json_encode($tags);
-                            // $json = json_encode($data);
-                            // $tags = json_encode($tags);
+                            // Ensure UTF-8 encoding for JSON encoding
+                            // wp_json_encode should handle UTF-8, but we'll ensure it explicitly
+                            $json = wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                            $tags_json = wp_json_encode($tags, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                            
+                            // Check for JSON encoding errors
+                            if ( $json === false || $tags_json === false ) {
+                                error_log("Zotpress: JSON encoding error - json_last_error: " . json_last_error_msg());
+                                // Fallback: try with error suppression and basic encoding
+                                $json = @wp_json_encode($data) ?: '[]';
+                                $tags_json = @wp_json_encode($tags) ?: '{}';
+                            }
+                            
+                            // Compress with UTF-8 preservation
+                            // gzencode should preserve UTF-8, but ensure it explicitly
+                            $json_compressed = @gzencode($json, 9);
+                            $tags_compressed = @gzencode($tags_json, 9);
+                            
+                            // Check if compression succeeded
+                            if ( $json_compressed === false || $tags_compressed === false ) {
+                                error_log("Zotpress: gzencode error - falling back to uncompressed");
+                                $json_compressed = $json;
+                                $tags_compressed = $tags_json;
+                            }
 
                             $wpdb->query(
                                 $wpdb->prepare(
@@ -647,8 +694,8 @@ if ( ! class_exists('ZotpressRequest') )
                                 (
                                     md5( $cache_url ),
                                     $this->api_user_id,
-                                    gzencode($json),
-                                    gzencode($tags), // 7.1.4: separated from $data
+                                    $json_compressed,
+                                    $tags_compressed, // 7.1.4: separated from $data
                                     $headers,
                                     $response["headers"]["last-modified-version"],
                                     gmdate('m/d/Y h:i:s a')
