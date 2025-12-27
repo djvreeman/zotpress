@@ -73,6 +73,7 @@ if ( ! class_exists('ZotpressRequest') )
             if ( strpos( $url, "groups/" ) !== false ) {
                 $divider = "groups/";
                 $this->account_type = "groups";
+                error_log("Zotpress: Detected group account from URL: " . $url);
             } elseif ( strpos( $url, "users/" ) !== false ) {
                 $this->account_type = "users";
             } else {
@@ -80,6 +81,7 @@ if ( ! class_exists('ZotpressRequest') )
                 error_log("Zotpress: Could not determine account type from URL: " . $url);
                 $this->account_type = "users";
             }
+            error_log("Zotpress: set_request_meta - account_type set to: " . $this->account_type . " for URL: " . $url);
             $temp1 = explode( $divider, $url );
             if ( isset($temp1[1]) ) {
                 $temp2 = explode( "/", $temp1[1] );
@@ -146,6 +148,11 @@ if ( ! class_exists('ZotpressRequest') )
 
             // NEW in 7.3.6: First, check the cache:
             // Use cleaned URL for cache lookup
+            // Initialize variables to prevent undefined variable warnings
+            $json = false;
+            $tags = false;
+            $headers = false;
+            
             $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
             $data = $this->check_and_get_cache( $cache_url );
             $data_json = json_decode($data["json"]);
@@ -264,6 +271,11 @@ if ( ! class_exists('ZotpressRequest') )
         function get_xml_data( $url, $updateneeded=false )
         {
             global $wpdb;
+            
+            // Initialize variables to prevent undefined variable warnings
+            $json = false;
+            $tags = false;
+            $headers = false;
 
             // Use cleaned URL for cache lookups
             $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
@@ -400,8 +412,9 @@ if ( ! class_exists('ZotpressRequest') )
                     $http_code = $response["response"]["code"];
                     if ( $http_code == 403 ) {
                         // Check if this is a group account - use stored account_type for reliable detection
-                        $is_group = ( $this->account_type === "groups" );
-                        error_log("Zotpress: 403 error - account_type: " . $this->account_type . ", request_url: " . $request_url . ", Is Group: " . ($is_group ? "Yes" : "No") . ", Has API Key: " . ($this->api_key ? "Yes" : "No"));
+                        // Also check URL as fallback in case account_type wasn't set
+                        $is_group = ( $this->account_type === "groups" ) || ( strpos( $request_url, "groups/" ) !== false ) || ( strpos( $url, "groups/" ) !== false );
+                        error_log("Zotpress: 403 error - account_type: " . ($this->account_type ? $this->account_type : "NOT SET") . ", request_url: " . $request_url . ", original url: " . $url . ", Is Group: " . ($is_group ? "Yes" : "No") . ", Has API Key: " . ($this->api_key ? "Yes" : "No"));
                         if ( $is_group && $this->api_key ) {
                             // For groups, if we get 403 with an API key, try without the key
                             // Public groups don't require authentication per Zotero API docs
@@ -419,6 +432,8 @@ if ( ! class_exists('ZotpressRequest') )
                                 $this->request_error = false;
                                 $response = $retry_response; // Use the successful retry response
                                 $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                                error_log("Zotpress: Retry successful for public group - proceeding with response");
+                                // Continue processing below - don't set error, let it fall through to normal processing
                             } else {
                                 // Still failed, provide error message
                                 if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) ) {
@@ -447,6 +462,8 @@ if ( ! class_exists('ZotpressRequest') )
                                 $this->request_error = false;
                                 $response = $retry_response; // Use the successful retry response
                                 $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                                error_log("Zotpress: Retry successful for public group (no API key) - proceeding with response");
+                                // Continue processing below - don't set error, let it fall through to normal processing
                             } else {
                                 // Still failed, group is private
                                 $this->request_error = "Access forbidden. This group is private and requires an API key with 'Read' or 'Read/Write' permissions. Check your Zotero Settings > Keys and the group's permissions.";
