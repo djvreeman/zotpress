@@ -16,6 +16,9 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 	if ( $is_ajax )
 		check_ajax_referer( 'zpShortcode_nonce_val', 'zpShortcode_nonce' );
+	
+	// Wrap in try-catch to handle any PHP errors gracefully
+	try {
 
 	// Set up database
 	global $wpdb, $post;
@@ -23,6 +26,16 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 	// Prep request vars
 	if ( $zpr === false || $zpr == '' )
 		$zpr = Zotpress_prep_ajax_request_vars($wpdb);
+	
+	// Validate and sanitize collection_id - reject invalid values like "loading"
+	if ( isset($zpr["collection_id"]) && $zpr["collection_id"] !== false && $zpr["collection_id"] !== "" )
+	{
+		$invalid_values = array("loading", "false", "true", "null", "undefined");
+		if ( in_array(strtolower($zpr["collection_id"]), $invalid_values) )
+		{
+			$zpr["collection_id"] = false;
+		}
+	}
 
 	// Include relevant classes and functions
 	include( dirname(__FILE__) . '/../request/request.class.php' );
@@ -217,23 +230,64 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 					if ( $checkcache && ! $zpr["request_update"] )
 					{
 						$zp_checkcache = $zp_import_contents->get_request_cache( $zp_request_url, $zpr["update"] );
-						$zp_checkcache_json = json_decode( $zp_checkcache['json'] );
-
-						if ( gettype($zp_checkcache_json) != 'array'
-								&& property_exists($zp_checkcache_json, 'status')
-								&& $zp_checkcache_json->status == 'No Cache' )
+						
+						// Check if get_request_cache returned an error string
+						if ( gettype($zp_checkcache) == "string"
+						 		&& substr($zp_checkcache, 0, 5) == "Error" )
 						{
-							// No cache exists - load it now so it gets cached for next time
+							$zp_error = substr($zp_checkcache, 7);
+							continue;
+						}
+						
+						// Check if cache data exists and is valid
+						if ( ! isset($zp_checkcache['json']) )
+						{
+							// No cache data - load it now
 							$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
-							$zp_usecache = false; // We just loaded it, so mark as not using cache
 							
-							if ( $zp_imported["updateneeded"] )
+							// Check if get_request_contents returned an error
+							if ( gettype($zp_imported) == "string"
+							 		&& substr($zp_imported, 0, 5) == "Error" )
+							{
+								$zp_error = substr($zp_imported, 7);
+								continue;
+							}
+							
+							$zp_usecache = false;
+							
+							if ( isset($zp_imported["updateneeded"]) )
 								$zp_updateneeded = true;
 						}
-						else // Continue as normal with cache
+						else
 						{
-							$zp_imported = $zp_checkcache;
-							$zp_usecache = true;
+							$zp_checkcache_json = json_decode( $zp_checkcache['json'] );
+
+							if ( gettype($zp_checkcache_json) != 'array'
+									&& is_object($zp_checkcache_json)
+									&& property_exists($zp_checkcache_json, 'status')
+									&& $zp_checkcache_json->status == 'No Cache' )
+							{
+								// No cache exists - load it now so it gets cached for next time
+								$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
+								
+								// Check if get_request_contents returned an error
+								if ( gettype($zp_imported) == "string"
+								 		&& substr($zp_imported, 0, 5) == "Error" )
+								{
+									$zp_error = substr($zp_imported, 7);
+									continue;
+								}
+								
+								$zp_usecache = false; // We just loaded it, so mark as not using cache
+								
+								if ( isset($zp_imported["updateneeded"]) )
+									$zp_updateneeded = true;
+							}
+							else // Continue as normal with cache
+							{
+								$zp_imported = $zp_checkcache;
+								$zp_usecache = true;
+							}
 						}
 					}
 					else // Otherwise, assume JS Ajax
@@ -269,23 +323,64 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						&& ! $zpr["request_update"] )
 				{
 					$zp_checkcache = $zp_import_contents->get_request_cache( $zp_request_account["requests"][0], $zpr["update"] );
-					$zp_checkcache_json = json_decode( $zp_checkcache['json'], false );
-
-					if ( gettype($zp_checkcache_json) != 'array'
-							&& property_exists($zp_checkcache_json, 'status')
-							&& $zp_checkcache_json->status == 'No Cache' )
+					
+					// Check if get_request_cache returned an error string
+					if ( gettype($zp_checkcache) == "string"
+					 		&& substr($zp_checkcache, 0, 5) == "Error" )
 					{
-						// No cache exists - load it now so it gets cached for next time
+						$zp_error = substr($zp_checkcache, 7);
+						continue;
+					}
+					
+					// Check if cache data exists and is valid
+					if ( ! isset($zp_checkcache['json']) )
+					{
+						// No cache data - load it now
 						$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
-						$zp_usecache = false; // We just loaded it, so mark as not using cache
+						
+						// Check if get_request_contents returned an error
+						if ( gettype($zp_imported) == "string"
+						 		&& substr($zp_imported, 0, 5) == "Error" )
+						{
+							$zp_error = substr($zp_imported, 7);
+							continue;
+						}
+						
+						$zp_usecache = false;
 						
 						if ( isset($zp_imported["updateneeded"]) )
 							$zp_updateneeded = true;
 					}
-					else // Continue as normal with cache
+					else
 					{
-						$zp_imported = $zp_checkcache;
-						$zp_usecache = true;
+						$zp_checkcache_json = json_decode( $zp_checkcache['json'], false );
+
+						if ( gettype($zp_checkcache_json) != 'array'
+								&& is_object($zp_checkcache_json)
+								&& property_exists($zp_checkcache_json, 'status')
+								&& $zp_checkcache_json->status == 'No Cache' )
+						{
+							// No cache exists - load it now so it gets cached for next time
+							$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
+							
+							// Check if get_request_contents returned an error
+							if ( gettype($zp_imported) == "string"
+							 		&& substr($zp_imported, 0, 5) == "Error" )
+							{
+								$zp_error = substr($zp_imported, 7);
+								continue;
+							}
+							
+							$zp_usecache = false; // We just loaded it, so mark as not using cache
+							
+							if ( isset($zp_imported["updateneeded"]) )
+								$zp_updateneeded = true;
+						}
+						else // Continue as normal with cache
+						{
+							$zp_imported = $zp_checkcache;
+							$zp_usecache = true;
+						}
 					}
 
 					// if ( $zp_checkcache["updateneeded"] )
@@ -1126,6 +1221,26 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 			if ( $is_ajax )
 				exit(); // REVIEW: Causing to break if error
+		}
+	}
+	} catch ( Exception $e ) {
+		// Log the error for debugging
+		error_log( 'Zotpress Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine() );
+		
+		// Return a proper error response
+		if ( $is_ajax ) {
+			$error_response = wp_json_encode(
+				array(
+					"status" => "error",
+					"instance" => isset($zpr["instance_id"]) ? $zpr["instance_id"] : false,
+					"meta" => array( "request_last" => 0, "request_next" => 0 ),
+					"data" => "An error occurred while processing your request. Please check the server error logs."
+				)
+			);
+			echo $error_response;
+			exit();
+		} else {
+			return "<p>Zotpress Error: An error occurred while processing your request.</p>";
 		}
 	}
 }
