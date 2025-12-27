@@ -45,12 +45,22 @@ if ( ! class_exists('ZotpressRequest') )
                 $this->request_type = $request_type;
 
             // Get and set api user id
+            // Check for groups first, then users
             $divider = "users/";
-            if ( strpos( $url, "groups" ) !== false )
+            if ( strpos( $url, "groups/" ) !== false ) {
                 $divider = "groups/";
+            } elseif ( strpos( $url, "users/" ) === false ) {
+                // If neither found, log error and default to users
+                error_log("Zotpress: Could not determine account type from URL: " . $url);
+            }
             $temp1 = explode( $divider, $url );
-            $temp2 = explode( "/", $temp1[1] );
-            $this->api_user_id = $temp2[0];
+            if ( isset($temp1[1]) ) {
+                $temp2 = explode( "/", $temp1[1] );
+                $this->api_user_id = $temp2[0];
+            } else {
+                error_log("Zotpress: Could not extract API user ID from URL: " . $url);
+                $this->api_user_id = false;
+            }
         }
 
 
@@ -310,13 +320,39 @@ if ( ! class_exists('ZotpressRequest') )
 
                 if ( is_wp_error($response) )
                     $this->request_error = $response->get_error_message();
-                // 7.3.13: No collection and tag error reporting:
-                else if ( $response["body"] == "Collection not found"
-                        || $response["body"] == "Tag not found" )
-                    $this->request_error = $response["body"];
-                else
-                    // $headers = json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                    $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                // Check for HTTP error codes that might indicate permission issues
+                else if ( isset($response["response"]["code"]) ) {
+                    $http_code = $response["response"]["code"];
+                    if ( $http_code == 403 ) {
+                        // Check if this is a group account
+                        $is_group = ( strpos( $url, "groups/" ) !== false );
+                        if ( $is_group ) {
+                            $this->request_error = "Access forbidden. For group libraries, ensure your API key has 'Read' or 'Read/Write' permissions for this group. Check your Zotero Settings > Keys and the group's permissions.";
+                        } else {
+                            $this->request_error = "Access forbidden. Check that your API key has proper permissions.";
+                        }
+                    } else if ( $http_code == 404 ) {
+                        $this->request_error = "Resource not found. Verify the group/user ID and that the resource exists.";
+                    } else if ( $http_code >= 400 ) {
+                        $this->request_error = "HTTP Error {$http_code}: " . ( isset($response["body"]) ? $response["body"] : "Unknown error" );
+                    } else {
+                        // 7.3.13: No collection and tag error reporting:
+                        if ( isset($response["body"]) && ( $response["body"] == "Collection not found" || $response["body"] == "Tag not found" ) ) {
+                            $this->request_error = $response["body"];
+                        } else {
+                            // $headers = json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                            $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                        }
+                    }
+                } else {
+                    // 7.3.13: No collection and tag error reporting:
+                    if ( isset($response["body"]) && ( $response["body"] == "Collection not found" || $response["body"] == "Tag not found" ) ) {
+                        $this->request_error = $response["body"];
+                    } else {
+                        // $headers = json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                        $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                    }
+                }
             }
 
             if ( ! $this->request_error )

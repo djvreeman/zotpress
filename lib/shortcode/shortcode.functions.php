@@ -875,8 +875,16 @@ function Zotpress_prep_request_URL( $wpdb, $zpr, $zp_request_queue, $api_user_id
 	// Make sure account was founded (is synced)
 	if ( count($zp_account) > 0 ) {
 
+		// Validate account_type - should be "users" or "groups"
+		$account_type = $zp_account[0]->account_type;
+		if ( $account_type !== "users" && $account_type !== "groups" ) {
+			// Default to users if invalid, but log the issue
+			error_log("Zotpress: Invalid account_type '{$account_type}' for account {$api_user_id}, defaulting to 'users'");
+			$account_type = "users";
+		}
+
 		// Basic URL: User type, user id, item type
-		$zp_import_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$api_user_id."/".$zpr["item_type"];
+		$zp_import_url = "https://api.zotero.org/".$account_type."/".$api_user_id."/".$zpr["item_type"];
 
 	    // Deal with item type Items
 	    if ( $zpr['item_type'] == 'items' ) {

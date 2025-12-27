@@ -93,13 +93,19 @@ function Zotpress_process_accounts_AJAX()
 
             if ( isset($_GET['public_key'])
                     && $_GET['public_key'] != "" )
+            {
                 if ( preg_match("/^[0-9a-zA-Z]+$/", sanitize_text_field(wp_unslash($_GET['public_key']))) == 1) {
                     $public_key = trim(sanitize_text_field(wp_unslash($_GET['public_key'])));
                 } elseif ( $account_type == "users" ) {
                     $errors['public_key_format'][0] = 1;
-                } elseif ( $account_type == "users" ) {
-                    $errors['public_key_blank'][0] = 1;
                 }
+                // Note: Groups may have different key formats or requirements
+            }
+            elseif ( $account_type == "users" ) {
+                // Public key is required for user accounts
+                $errors['public_key_blank'][0] = 1;
+            }
+            // Groups may not require a public key in some cases, but it's recommended
 
             // NICKNAME
             $nickname = false;
