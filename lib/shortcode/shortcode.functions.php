@@ -1,5 +1,88 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
+/**
+ * Comprehensive sanitization function for titles and tags with special characters
+ * Handles quotes, brackets, question marks, and other problematic characters
+ * 
+ * @param mixed $data The data to sanitize (string, array, or object)
+ * @param string $type The type of data: 'title', 'tag', or 'general'
+ * @return mixed Sanitized data in the same format as input
+ */
+function zotpress_sanitize_special_chars( $data, $type = 'general' ) {
+	try {
+		// Handle arrays
+		if ( is_array( $data ) ) {
+			$sanitized = array();
+			foreach ( $data as $key => $value ) {
+				$sanitized[$key] = zotpress_sanitize_special_chars( $value, $type );
+			}
+			return $sanitized;
+		}
+		
+		// Handle objects
+		if ( is_object( $data ) ) {
+			$sanitized = new stdClass();
+			foreach ( get_object_vars( $data ) as $key => $value ) {
+				$sanitized->$key = zotpress_sanitize_special_chars( $value, $type );
+			}
+			return $sanitized;
+		}
+		
+		// Handle strings
+		if ( ! is_string( $data ) ) {
+			return $data;
+		}
+		
+		// Ensure UTF-8 encoding
+		$data = mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+		
+		// Remove null bytes and other control characters that can break JSON
+		$data = str_replace( "\0", '', $data );
+		$data = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $data );
+		
+		// Normalize line breaks
+		$data = str_replace( array( "\r\n", "\r" ), "\n", $data );
+		
+		// For titles and tags, handle special characters more carefully
+		if ( $type === 'title' || $type === 'tag' ) {
+			// Preserve valid UTF-8 characters but ensure proper encoding
+			$data = mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+			
+			// Remove or replace problematic characters that can break JSON/HTML
+			// But preserve common punctuation and special characters
+			// Only remove truly problematic control characters
+			
+			// Ensure the string is valid UTF-8
+			if ( ! mb_check_encoding( $data, 'UTF-8' ) ) {
+				$data = mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+			}
+			
+			// Remove any remaining invalid UTF-8 sequences
+			$data = mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+			
+			// Remove any characters that could break JSON encoding
+			// This includes control characters but preserves printable characters including brackets, quotes, etc.
+			$data = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $data );
+			
+			// Ensure no invalid UTF-8 sequences remain
+			// Use htmlspecialchars as a safe fallback if needed (but we prefer to preserve characters)
+			if ( ! mb_check_encoding( $data, 'UTF-8' ) ) {
+				$data = mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+			}
+		}
+		
+		return $data;
+		
+	} catch ( Exception $e ) {
+		error_log( "Zotpress: Error in zotpress_sanitize_special_chars: " . $e->getMessage() );
+		// Return safe fallback
+		if ( is_string( $data ) ) {
+			return mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+		}
+		return $data;
+	}
+}
+
 
 /**
  * Removes all extra quotations.

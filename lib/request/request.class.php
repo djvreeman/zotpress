@@ -564,6 +564,26 @@ if ( ! class_exists('ZotpressRequest') )
                             // REVIEW: Does this account for all unused metadata? Depends on item type ...
                             foreach( $data as $id => $item )
                             {
+                                // Sanitize title and other text fields with special characters BEFORE processing
+                                try {
+                                    if ( property_exists($data[$id], 'data') ) {
+                                        // Sanitize title if it exists
+                                        if ( property_exists($data[$id]->data, 'title') && is_string($data[$id]->data->title) ) {
+                                            $data[$id]->data->title = zotpress_sanitize_special_chars( $data[$id]->data->title, 'title' );
+                                        }
+                                        // Sanitize other text fields that might have special characters
+                                        $text_fields = array( 'abstractNote', 'shortTitle', 'publicationTitle', 'seriesTitle', 'websiteTitle' );
+                                        foreach ( $text_fields as $field ) {
+                                            if ( property_exists($data[$id]->data, $field) && is_string($data[$id]->data->$field) ) {
+                                                $data[$id]->data->$field = zotpress_sanitize_special_chars( $data[$id]->data->$field, 'title' );
+                                            }
+                                        }
+                                    }
+                                } catch ( Exception $e ) {
+                                    // Log but continue processing
+                                    error_log("Zotpress: Error sanitizing title/text fields for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
+                                }
+                                
                                 if ( property_exists($data[$id], 'version') ) unset($data[$id]->version);
                                 if ( property_exists($data[$id], 'links') ) unset($data[$id]->links);
 
@@ -618,28 +638,37 @@ if ( ! class_exists('ZotpressRequest') )
                                 {
                                     $tags[$item->key] = "";
 
-                                    // Handle tags with special characters (e.g., ® symbol)
+                                    // Handle tags with special characters (e.g., ® symbol, brackets, quotes)
                                     // Wrap in try-catch to prevent 500 errors from encoding issues
                                     try {
                                         if ( property_exists($data[$id], 'data')
                                                 && property_exists($data[$id]->data, 'tags') )
                                         {
+                                            // Use comprehensive sanitization function
+                                            $tag_data = zotpress_sanitize_special_chars( $data[$id]->data->tags, 'tag' );
+                                            
                                             // Ensure tags are properly encoded as UTF-8
-                                            if ( is_array($data[$id]->data->tags) ) {
+                                            if ( is_array($tag_data) ) {
                                                 // Process each tag to ensure UTF-8 encoding
                                                 $processed_tags = array();
-                                                foreach ( $data[$id]->data->tags as $tag_obj ) {
+                                                foreach ( $tag_data as $tag_obj ) {
                                                     if ( is_object($tag_obj) && property_exists($tag_obj, 'tag') ) {
-                                                        // Ensure the tag string is UTF-8 encoded
-                                                        $tag_str = mb_convert_encoding($tag_obj->tag, 'UTF-8', 'UTF-8');
+                                                        // Sanitize the tag string comprehensively
+                                                        $tag_str = zotpress_sanitize_special_chars( $tag_obj->tag, 'tag' );
+                                                        // Ensure valid UTF-8
+                                                        if ( ! mb_check_encoding( $tag_str, 'UTF-8' ) ) {
+                                                            $tag_str = mb_convert_encoding( $tag_str, 'UTF-8', 'UTF-8' );
+                                                        }
+                                                        // Remove any remaining problematic characters
+                                                        $tag_str = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $tag_str );
                                                         $processed_tags[] = (object) array('tag' => $tag_str);
                                                     } else {
-                                                        $processed_tags[] = $tag_obj;
+                                                        $processed_tags[] = zotpress_sanitize_special_chars( $tag_obj, 'tag' );
                                                     }
                                                 }
                                                 $tags[$item->key] = $processed_tags;
                                             } else {
-                                                $tags[$item->key] = $data[$id]->data->tags;
+                                                $tags[$item->key] = $tag_data;
                                             }
                                             unset($data[$id]->data->tags);
                                         }

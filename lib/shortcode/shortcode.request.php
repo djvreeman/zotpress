@@ -674,6 +674,15 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 					$item->bib = str_ireplace("In ", "", $item->bib);
 				}
 
+				// Sanitize title before processing (handles quotes, brackets, special chars)
+				try {
+					if ( isset($item->data->title) && is_string($item->data->title) ) {
+						$item->data->title = zotpress_sanitize_special_chars( $item->data->title, 'title' );
+					}
+				} catch ( Exception $e ) {
+					error_log("Zotpress: Error sanitizing title for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
+				}
+
 				// Hyperlink or URL Wrap
 				if ( isset($item->data->url)
 					// && $item->data->url !== null
@@ -1085,6 +1094,20 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 			// TODO: Perhaps cache the download requests and deal with them separately
 			foreach ( $zp_all_the_data as $id => $data )
 			{
+				// Comprehensive sanitization of titles and tags before final output
+				try {
+					if ( isset($data->data->title) ) {
+						$zp_all_the_data[$id]->data->title = zotpress_sanitize_special_chars( $data->data->title, 'title' );
+					}
+					if ( isset($data->data->tags) ) {
+						$zp_all_the_data[$id]->data->tags = zotpress_sanitize_special_chars( $data->data->tags, 'tag' );
+					}
+					if ( isset($data->data->abstractNote) ) {
+						$zp_all_the_data[$id]->data->abstractNote = zotpress_sanitize_special_chars( $data->data->abstractNote, 'title' );
+					}
+				} catch ( Exception $e ) {
+					error_log("Zotpress: Error in final sanitization for item " . (isset($data->key) ? $data->key : 'unknown') . ": " . $e->getMessage());
+				}
 				// 7.4 Update: Trying to avoid errors ...
 				// Ensure consistent HTML encoding for JSON output
 				if ( isset($zp_all_the_data[$id]->bib) )
@@ -1180,6 +1203,32 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		if ( count($zp_all_the_data) > 0
 		 		&& $zp_all_the_data != "" )
 		{
+			// Final comprehensive sanitization pass before JSON encoding
+			// This catches any special characters that might have been missed
+			try {
+				foreach ( $zp_all_the_data as $id => $item ) {
+					if ( isset($item->data) ) {
+						// Sanitize all string fields that might contain special characters
+						$string_fields = array( 'title', 'abstractNote', 'shortTitle', 'publicationTitle', 'seriesTitle', 'websiteTitle' );
+						foreach ( $string_fields as $field ) {
+							if ( isset($item->data->$field) && is_string($item->data->$field) ) {
+								$zp_all_the_data[$id]->data->$field = zotpress_sanitize_special_chars( $item->data->$field, 'title' );
+							}
+						}
+						// Sanitize tags if they exist
+						if ( isset($item->data->tags) ) {
+							$zp_all_the_data[$id]->data->tags = zotpress_sanitize_special_chars( $item->data->tags, 'tag' );
+						}
+						// Sanitize bib HTML
+						if ( isset($item->bib) && is_string($item->bib) ) {
+							$zp_all_the_data[$id]->bib = zotpress_sanitize_special_chars( $item->bib, 'title' );
+						}
+					}
+				}
+			} catch ( Exception $e ) {
+				error_log("Zotpress: Error in final sanitization pass: " . $e->getMessage());
+			}
+			
 			// Ensure proper JSON encoding with error handling for titles with quotes
 			try {
 				$zp_json_encoded = wp_json_encode(
@@ -1196,13 +1245,11 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				// Check for JSON encoding errors
 				if ( $zp_json_encoded === false ) {
 					error_log("Zotpress: JSON encoding error - json_last_error: " . json_last_error_msg());
-					// Fallback: try with basic encoding and sanitize problematic data
-					$sanitized_data = $zp_all_the_data;
-					foreach ( $sanitized_data as $id => $item ) {
-						if ( isset($item->data->title) ) {
-							// Ensure title is properly encoded
-							$sanitized_data[$id]->data->title = mb_convert_encoding($item->data->title, 'UTF-8', 'UTF-8');
-						}
+					// Fallback: try with comprehensive sanitization
+					$sanitized_data = array();
+					foreach ( $zp_all_the_data as $id => $item ) {
+						$sanitized_item = zotpress_sanitize_special_chars( $item, 'general' );
+						$sanitized_data[] = $sanitized_item;
 					}
 					$zp_json_encoded = wp_json_encode(
 						array (
@@ -1211,11 +1258,12 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 							"instance" => $zpr["instance_id"],
 							"meta" => $zp_request_meta,
 							"data" => $sanitized_data
-						)
+						),
+						JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 					);
 					if ( $zp_json_encoded === false ) {
 						// Last resort: return error
-						throw new Exception("JSON encoding failed after sanitization");
+						throw new Exception("JSON encoding failed after comprehensive sanitization: " . json_last_error_msg());
 					}
 				}
 			} catch ( Exception $e ) {
