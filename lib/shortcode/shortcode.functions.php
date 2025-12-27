@@ -883,8 +883,18 @@ function Zotpress_prep_request_URL( $wpdb, $zpr, $zp_request_queue, $api_user_id
 			$account_type = "users";
 		}
 
+		// Debug logging for group accounts
+		if ( $account_type === "groups" ) {
+			error_log("Zotpress: Processing group account - ID: {$api_user_id}, Type: {$account_type}, Has Key: " . (!empty($zp_account[0]->public_key) ? "Yes" : "No"));
+		}
+
 		// Basic URL: User type, user id, item type
 		$zp_import_url = "https://api.zotero.org/".$account_type."/".$api_user_id."/".$zpr["item_type"];
+
+		// Debug logging for group accounts - log the base URL
+		if ( $account_type === "groups" ) {
+			error_log("Zotpress: Group API URL base: {$zp_import_url}");
+		}
 
 	    // Deal with item type Items
 	    if ( $zpr['item_type'] == 'items' ) {
@@ -980,6 +990,14 @@ function Zotpress_prep_request_URL( $wpdb, $zpr, $zp_request_queue, $api_user_id
 		// Start if multiple
 		if ( $zpr["request_start"] != 0 )
 			$zp_import_url .= "&start=".$zpr["request_start"];
+
+		// Debug logging for group accounts - log the final URL (without key for security)
+		if ( $account_type === "groups" ) {
+			$debug_url = $zp_import_url;
+			// Remove API key from logged URL for security
+			$debug_url = preg_replace('/key=[^&]*&?/', 'key=***&', $debug_url);
+			error_log("Zotpress: Group API final URL: {$debug_url}");
+		}
 
 		// Multiple item keys
 		// EVENTUAL TODO: Limited to 50 item keys at a time ... can I get around this?

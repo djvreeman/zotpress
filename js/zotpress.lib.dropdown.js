@@ -126,6 +126,21 @@ jQuery(document).ready(function()
 					jQuery("select.zp-Browse-Collections-Select", zpThisLib).removeClass("loading").find(".loading").remove();
 					return;
 				}
+
+				// Check for error status
+				if ( zp_collections.status === 'error' ) {
+					console.log("zp: Server returned error:", zp_collections.data);
+					jQuery("select.zp-Browse-Collections-Select", zpThisLib).removeClass("loading").find(".loading").remove();
+					return;
+				}
+
+				// Check for empty status
+				if ( zp_collections.status === 'empty' ) {
+					console.log("zp: No collections found");
+					jQuery("select.zp-Browse-Collections-Select", zpThisLib).removeClass("loading").find(".loading").remove();
+					return;
+				}
+
 				var zp_collection_options = "";
 
 				// Remove cached bib before adding updates
@@ -154,6 +169,8 @@ jQuery(document).ready(function()
 					// 		.append( "<option value='blank' class='blank'>Default Collection</option>\n" );
 // console.log('test', jQuery(".ZP_COLLECTION_NAME", zpThisLib).text());
 				if ( zp_collections != "0"
+						&& zp_collections.data
+						&& Array.isArray(zp_collections.data)
 						&& zp_collections.data.length > 0
 						&& zp_collections.data != "0" )
 				{
@@ -248,6 +265,23 @@ jQuery(document).ready(function()
 					return;
 				}
 
+				// Check for error status
+				if ( zp_tags.status === 'error' ) {
+					console.log("zp: Server returned error:", zp_tags.data);
+					jQuery("select.zp-List-Tags", zpThisLib).removeClass("loading").find(".loading").remove();
+					return;
+				}
+
+				// Check for empty status
+				if ( zp_tags.status === 'empty' ) {
+					console.log("zp: No tags found");
+					jQuery("select.zp-List-Tags", zpThisLib).removeClass("loading").find(".loading").remove();
+					jQuery("select.zp-List-Tags", zpThisLib).append(
+						"<option rel='empty' value='empty'>"+zpShortcodeAJAX.txt_notags+"</option>"
+					);
+					return;
+				}
+
 				var zp_tag_options = "<option class='zp-List-Tags-Select' name='zp-List-Tags-Select'>--"+zpShortcodeAJAX.txt_notagsel+"--</option>\n";
 				if ( zpThisLibProps.zpTagId ) zp_tag_options = "<option value='toplevel' class='toplevel'>--"+zpShortcodeAJAX.txt_unsettag+"--</option>\n";
 
@@ -257,7 +291,10 @@ jQuery(document).ready(function()
 				if ( update === true && ! jQuery("select.zp-List-Tags", zpThisLib).hasClass("updating") )
 					jQuery("select.zp-List-Tags", zpThisLib).empty().addClass("updating");
 
-				if ( zp_tags !== 0 && zp_tags.data.length > 0 )
+				if ( zp_tags !== 0 
+						&& zp_tags.data
+						&& Array.isArray(zp_tags.data)
+						&& zp_tags.data.length > 0 )
 				{
 					jQuery.each( zp_tags.data, function( index, tag )
 					{

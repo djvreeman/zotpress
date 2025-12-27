@@ -414,9 +414,15 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				{
         			$zp_error = substr($zp_imported, 7, -1);
 				}
-
+				// Check if zp_imported is an array but missing required keys
+				elseif ( is_array($zp_imported) && ! isset($zp_imported["json"]) )
+				{
+					// Log for debugging
+					error_log("Zotpress: get_request_contents returned array without 'json' key. Keys: " . implode(", ", array_keys($zp_imported)));
+					$zp_error = "Invalid response from Zotero API - missing data";
+				}
 				// Create all-requests json if doesn't exists
-				else
+				elseif ( is_array($zp_imported) && isset($zp_imported["json"]) )
 				{
 					if ( empty($zp_request) )
 					{
@@ -428,12 +434,23 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						$zp_request["json"] = rtrim($zp_request["json"], "]") . "," . ltrim($zp_imported["json"], "[") . "]";
 					}
 				}
+				else
+				{
+					// Unexpected response type
+					error_log("Zotpress: Unexpected response type from get_request_contents: " . gettype($zp_imported));
+					$zp_error = "Unexpected response from server";
+				}
 
-				// 7.4 Update: Might not exist?
-				if ( ! isset($zp_request["json"]) )
+				// 7.4 Update: Only check for JSON if no error was set and request was populated
+				if ( ! $zp_error && ! isset($zp_request["json"]) )
+				{
+					error_log("Zotpress: zp_request array exists but 'json' key is missing. Keys: " . (isset($zp_request) && is_array($zp_request) ? implode(", ", array_keys($zp_request)) : "not an array"));
 					$zp_error = "JSON not found";
-				elseif ( isset($zp_request["json"]) && $zp_request["json"] == "Not found" )
+				}
+				elseif ( ! $zp_error && isset($zp_request["json"]) && $zp_request["json"] == "Not found" )
+				{
 					$zp_error = $zp_request["json"];
+				}
 				
     			// } elseif ( empty($zp_request) ) {
 			    //     $zp_request = $zp_imported;
