@@ -860,11 +860,11 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						// Get the user's account
 						$zp_account = zotpress_get_account ($wpdb, $tempUserId);
 
+						// Use HTTP header for API key (recommended per Zotero API docs)
 						$zp_child_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$tempUserId."/items";
 						$zp_child_url .= "/".$item->key."/children?";
-						if (!is_null($zp_account[0]->public_key) && trim($zp_account[0]->public_key) != "")
-							$zp_child_url .= "key=".$zp_account[0]->public_key."&";
-						$zp_child_url .= "&format=json&include=data";
+						// Note: API key is now passed as HTTP header (Zotero-API-Key) in request.class.php
+						$zp_child_url .= "format=json&include=data";
 
 						// Get data
 						$zp_import_child = new ZotpressRequest();

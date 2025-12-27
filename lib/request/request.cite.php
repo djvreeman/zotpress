@@ -50,22 +50,37 @@ function Zotpress_get_cite_AJAX()
 		// 7.4 Update: Not needed
 		// Build import structure
 		// $zp_import_contents = new ZotpressRequest();
-		$zp_import_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$zp_api_user_id."/items/".$zp_item_key."?format=ris&key=".$zp_account[0]->public_key;
+		// Use HTTP header for API key (recommended per Zotero API docs)
+		$zp_import_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$zp_api_user_id."/items/".$zp_item_key."?format=ris";
+		
+		$headers = array(
+			"Zotero-API-Version" => "3"
+		);
+		if ( ! empty($zp_account[0]->public_key) ) {
+			$headers["Zotero-API-Key"] = $zp_account[0]->public_key;
+		}
 
 		// 7.4 Update: Totally new approach
 		header("Content-Type: application/x-research-info-systems");
 		header('Content-Disposition: attachment; filename="itemkey-'.$zp_item_key.'.ris"');
 		header('Content-Description: Cite with RIS');
-		// @readfile($zp_import_url);
-		$content = $wp_filesystem->get_contents( $zp_import_url );
-		// 7.4.1: Trying sanitize
-		$content = sanitize_textarea_field( $content );
+		
+		// Use wp_remote_get with headers instead of wp_filesystem
+		$response = wp_remote_get( $zp_import_url, array( 'headers' => $headers ) );
+		
+		if ( is_wp_error($response) ) {
+			echo 'Error: ' . $response->get_error_message();
+		} else {
+			$content = wp_remote_retrieve_body( $response );
+			// 7.4.1: Trying sanitize
+			$content = sanitize_textarea_field( $content );
 
-		if ( $content !== false )
-			// 7.4.1: Replacing var_dump after sanitizing
-			echo $content;
-		else
-			echo 'Could not read the file';
+			if ( $content !== false )
+				// 7.4.1: Replacing var_dump after sanitizing
+				echo $content;
+			else
+				echo 'Could not read the file';
+		}
 
 		// // Read the external data
 		// $zp_xml = $zp_import_contents->get_request_contents( $zp_import_url, true, 'ris' );

@@ -21,6 +21,8 @@ if ( ! class_exists('ZotpressRequest') )
                 $request_error = false,
                 $check_every_n_mins = 10, // 10 minutes
                 $api_user_id,
+                $api_key = false,
+                $cleaned_url = false,
                 $request_type = 'item';
 
         // REVIEW: This was causing problems for some people ...
@@ -44,6 +46,26 @@ if ( ! class_exists('ZotpressRequest') )
             if ( $request_type != 'item' )
                 $this->request_type = $request_type;
 
+            // Extract API key from URL if present (for backward compatibility)
+            // Then remove it from URL as we'll use it as a header
+            $parsed_url = parse_url($url);
+            if ( isset($parsed_url['query']) ) {
+                parse_str($parsed_url['query'], $query_params);
+                if ( isset($query_params['key']) ) {
+                    $this->api_key = $query_params['key'];
+                    // Remove key from query string
+                    unset($query_params['key']);
+                    // Rebuild URL without key
+                    $new_query = http_build_query($query_params);
+                    $url = $parsed_url['scheme'] . '://' . $parsed_url['host'] . $parsed_url['path'];
+                    if ( !empty($new_query) ) {
+                        $url .= '?' . $new_query;
+                    } elseif ( isset($parsed_url['fragment']) ) {
+                        $url .= '#' . $parsed_url['fragment'];
+                    }
+                }
+            }
+
             // Get and set api user id
             // Check for groups first, then users
             $divider = "users/";
@@ -61,6 +83,18 @@ if ( ! class_exists('ZotpressRequest') )
                 error_log("Zotpress: Could not extract API user ID from URL: " . $url);
                 $this->api_user_id = false;
             }
+
+            // If we don't have an API key from URL, try to get it from database
+            if ( ! $this->api_key && $this->api_user_id ) {
+                global $wpdb;
+                $zp_account = zotpress_get_account( $wpdb, $this->api_user_id );
+                if ( count($zp_account) > 0 && ! empty($zp_account[0]->public_key) ) {
+                    $this->api_key = $zp_account[0]->public_key;
+                }
+            }
+
+            // Store cleaned URL (without key) for use in requests
+            $this->cleaned_url = $url;
         }
 
 
@@ -69,7 +103,9 @@ if ( ! class_exists('ZotpressRequest') )
         {
             $this->set_request_meta( $url, $update, $request_type );
 
-            $data = $this->check_and_get_cache( $url );
+            // Use cleaned URL for cache lookup
+            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
+            $data = $this->check_and_get_cache( $cache_url );
 
             // Check for request errors
             if ( $this->request_error !== false )
@@ -86,7 +122,9 @@ if ( ! class_exists('ZotpressRequest') )
 
             $this->set_request_meta( $url, $update, $request_type );
 
-            $data = $this->getRegular( $wpdb, $url, true );
+            // Use cleaned URL for request
+            $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
+            $data = $this->getRegular( $wpdb, $request_url );
             $data["json"] = $data["data"];
 
             // Check for request errors
@@ -102,7 +140,9 @@ if ( ! class_exists('ZotpressRequest') )
             $this->set_request_meta( $url, $update, $request_type );
 
             // NEW in 7.3.6: First, check the cache:
-            $data = $this->check_and_get_cache( $url );
+            // Use cleaned URL for cache lookup
+            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
+            $data = $this->check_and_get_cache( $cache_url );
             $data_json = json_decode($data["json"]);
 
             // Only try to update if time has passed:
@@ -114,7 +154,9 @@ if ( ! class_exists('ZotpressRequest') )
             // if ( property_exists($data_json, "status")
             //         && $data_json->status == "No Cache" )
             {
-                $data = $this->get_xml_data( $url, $data["updateneeded"] );
+                // Use cleaned URL for request
+                $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
+                $data = $this->get_xml_data( $request_url, $data["updateneeded"] );
             }
 
             // Check for request errors
@@ -156,6 +198,9 @@ if ( ! class_exists('ZotpressRequest') )
         {
             global $wpdb;
 
+            // Use cleaned URL for cache lookups (consistent key regardless of key location)
+            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
+
             // First, check db to see if cached version exists
             // $zp_query =
             //         "
@@ -173,7 +218,7 @@ if ( ! class_exists('ZotpressRequest') )
                     WHERE ".$wpdb->prefix."zotpress_cache.request_id = %s
                     AND ".$wpdb->prefix."zotpress_cache.api_user_id = %s
                     ",
-                    array( md5($url), $this->api_user_id )
+                    array( md5($cache_url), $this->api_user_id )
                 ), OBJECT
             );
             // unset($zp_query);
@@ -215,6 +260,9 @@ if ( ! class_exists('ZotpressRequest') )
         {
             global $wpdb;
 
+            // Use cleaned URL for cache lookups
+            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
+
             // Just want to check for cached version
             if ( $this->update === false )
             {
@@ -223,7 +271,7 @@ if ( ! class_exists('ZotpressRequest') )
                 //         "
                 //         SELECT DISTINCT ".$wpdb->prefix."zotpress_cache.*
                 //         FROM ".$wpdb->prefix."zotpress_cache
-                //         WHERE ".$wpdb->prefix."zotpress_cache.request_id = '".md5( $url )."'
+                //         WHERE ".$wpdb->prefix."zotpress_cache.request_id = '".md5( $cache_url )."'
                 //         AND ".$wpdb->prefix."zotpress_cache.api_user_id = '".$this->api_user_id."'
                 //         ";
                 // $zp_results = $wpdb->get_results( $zp_query, OBJECT ); unset($zp_query);
@@ -236,7 +284,7 @@ if ( ! class_exists('ZotpressRequest') )
                         WHERE ".$wpdb->prefix."zotpress_cache.request_id = %s
                         AND ".$wpdb->prefix."zotpress_cache.api_user_id = %s
                         ",
-                        array( md5($url), $this->api_user_id )
+                        array( md5($cache_url), $this->api_user_id )
                     ), OBJECT
                 );
                 
@@ -250,7 +298,9 @@ if ( ! class_exists('ZotpressRequest') )
 
                 else // No cached
                 {
-                    $regular = $this->getRegular( $wpdb, $url );
+                    // Use cleaned URL for request
+                    $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
+                    $regular = $this->getRegular( $wpdb, $request_url );
 
                     $json = $regular['data'];
                     $tags = $regular['tags'];
@@ -262,7 +312,9 @@ if ( ! class_exists('ZotpressRequest') )
 
             else // Normal or RIS
             {
-                $regular = $this->getRegular( $wpdb, $url );
+                // Use cleaned URL for request
+                $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
+                $regular = $this->getRegular( $wpdb, $request_url );
 
                 $json = $regular['data'];
                 $tags = $regular['tags'];
@@ -276,6 +328,9 @@ if ( ! class_exists('ZotpressRequest') )
         function getRegular( $wpdb, $url )
         {
             global $wpdb;
+
+            // Use cleaned URL for cache lookups (consistent key regardless of key location)
+            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
 
             // First, check db to see if cached version exists
             // $zp_query =
@@ -295,7 +350,7 @@ if ( ! class_exists('ZotpressRequest') )
                     WHERE ".$wpdb->prefix."zotpress_cache.request_id = %s
                     AND ".$wpdb->prefix."zotpress_cache.api_user_id = %s
                     ",
-                    array( md5($url), $this->api_user_id )
+                    array( md5($cache_url), $this->api_user_id )
                 ), OBJECT
             );
 
@@ -312,11 +367,19 @@ if ( ! class_exists('ZotpressRequest') )
             {
                 $headers_arr = array ( "Zotero-API-Version" => "3" );
 
+                // Add API key as header (recommended method per Zotero API docs)
+                if ( $this->api_key ) {
+                    $headers_arr["Zotero-API-Key"] = $this->api_key;
+                }
+
                 if ( count($zp_results) > 0 )
                     $headers_arr["If-Modified-Since-Version"] = $zp_results[0]->libver;
 
+                // Use cleaned URL (without key in query string)
+                $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
+
                 // Get response
-                $response = wp_remote_get( $url, array ( 'headers' => $headers_arr ) );
+                $response = wp_remote_get( $request_url, array ( 'headers' => $headers_arr ) );
 
                 if ( is_wp_error($response) )
                     $this->request_error = $response->get_error_message();
@@ -372,7 +435,11 @@ if ( ! class_exists('ZotpressRequest') )
                         {
                             // Try again with less restrictions
                             add_filter('https_ssl_verify', '__return_false');
-                            $response = wp_remote_get( $url, array( 'headers' => array("Zotero-API-Version" => "2") ) );
+                            $fallback_headers = array("Zotero-API-Version" => "2");
+                            if ( $this->api_key ) {
+                                $fallback_headers["Zotero-API-Key"] = $this->api_key;
+                            }
+                            $response = wp_remote_get( $request_url, array( 'headers' => $fallback_headers ) );
 
                             if (is_wp_error($response) || ! isset($response['body'])) {
                                 $this->request_error = $response->get_error_message();
@@ -501,7 +568,7 @@ if ( ! class_exists('ZotpressRequest') )
                                 ",
                                 array
                                 (
-                                    md5( $url ),
+                                    md5( $cache_url ),
                                     $this->api_user_id,
                                     gzencode($json),
                                     gzencode($tags), // 7.1.4: separated from $data
@@ -546,7 +613,7 @@ if ( ! class_exists('ZotpressRequest') )
                         ",
                         array
                         (
-                            md5( $url ),
+                            md5( $cache_url ),
                             $this->api_user_id,
                             gmdate('m/d/Y h:i:s a')
                         ))

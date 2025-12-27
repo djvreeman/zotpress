@@ -93,17 +93,16 @@ function Zotpress_widget_metabox_AJAX_search()
 	$zp_account = zotpress_get_account ($wpdb, $zp_api_user_id);
 
 	// Format Zotero request URL
-	// e.g., https://api.zotero.org/users/#####/items?key=###&format=json&q=###&limit=25
+	// Use HTTP header for API key (recommended per Zotero API docs)
+	// e.g., https://api.zotero.org/users/#####/items?format=json&q=###&limit=25
 	$zp_import_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$zp_account[0]->api_user_id."/items?";
-	if ( ! is_null($zp_account[0]->public_key) 
-			&& trim($zp_account[0]->public_key) != "" )
-		$zp_import_url .= "key=".$zp_account[0]->public_key."&";
 	$zp_import_url .= "format=json";
 	if ( isset($_GET['term']) )
 		$zp_import_url .= "&q=" . urlencode(sanitize_text_field(wp_unslash($_GET['term'])));
 	$zp_import_url .= "&limit=10&itemType=-attachment+||+note";
 
 	// Read the external data
+	// Note: API key is now passed as HTTP header in request.class.php
 	$zp_xml = $zp_import_contents->get_request_contents( $zp_import_url, true ); // Unsure about "true"
 	$zpResultJSON = json_decode( $zp_xml["json"] );
 

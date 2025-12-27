@@ -6,7 +6,7 @@
     Plugin URI: http://katieseaborn.com/plugins
     Description: Bringing Zotero and scholarly blogging to your WordPress website.
     Author: Daniel Vreeman
-    Version: 7.4.2
+    Version: 7.4.3
     Author URI: http://katieseaborn.com
     Text Domain: zotpress
     Domain Path: /languages/
@@ -46,7 +46,7 @@ For requests:
 - Format again with JS
 
 To-do:
-* Zotero-API-Key` rather than `key=`.
+* ~~Zotero-API-Key` rather than `key=`.~~ (Completed in 7.4.3)
 * qmode=titleCreatorYear&q=2000,2001 -> v3 doesn't work
 * multiple itemtype
 * fix "dateAdded"
@@ -74,7 +74,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     define('ZOTPRESS_PLUGIN_FILE',  __FILE__ );
     define('ZOTPRESS_PLUGIN_URL', plugin_dir_url( ZOTPRESS_PLUGIN_FILE ));
     define('ZOTPRESS_PLUGIN_DIR', dirname( __FILE__ ));
-    define('ZOTPRESS_VERSION', '7.4.2' );
+    define('ZOTPRESS_VERSION', '7.4.3' );
     define('ZOTPRESS_BUILD', '1' ); // Increment this for each build/change
 
     // NOTE: Remember to set to TRUE after dev and before version release

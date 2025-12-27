@@ -966,10 +966,9 @@ function Zotpress_prep_request_URL( $wpdb, $zpr, $zp_request_queue, $api_user_id
 		
 		$zp_import_url .= "?";
 
-		// Public key, if needed
-		if ( ! is_null($zp_account[0]->public_key) 
-				&& trim($zp_account[0]->public_key) != "" )
-			$zp_import_url .= "key=".$zp_account[0]->public_key."&";
+		// Note: API key is now passed as HTTP header (Zotero-API-Key) in request.class.php
+		// This follows the recommended authentication method per Zotero API documentation
+		// Removed: key parameter from URL
 
 		// Style
 		$zp_import_url .= "style=".$zpr["style"];

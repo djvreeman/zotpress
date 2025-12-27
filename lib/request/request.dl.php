@@ -60,9 +60,17 @@ function Zotpress_get_dl_AJAX()
 		// $zp_import_filedata = new ZotpressRequest();
 
 		// Build API URLs
+		// Use HTTP header for API key (recommended per Zotero API docs)
 		$zp_import_baseurl = "https://api.zotero.org/".$zp_account[0]->account_type."/".$zp_api_user_id."/items/".$zp_item_key;
 		// $zp_import_meta_url = $zp_import_baseurl."?key=".$zp_account[0]->public_key;
-		$zp_import_data_url = $zp_import_baseurl."/file/view?key=".$zp_account[0]->public_key;
+		$zp_import_data_url = $zp_import_baseurl."/file/view";
+		
+		$headers = array(
+			"Zotero-API-Version" => "3"
+		);
+		if ( ! empty($zp_account[0]->public_key) ) {
+			$headers["Zotero-API-Key"] = $zp_account[0]->public_key;
+		}
 
 		// 7.4: Not needed
 		// // Read the external data
@@ -100,13 +108,20 @@ function Zotpress_get_dl_AJAX()
 			// 7.4 Update: Not worth the request
 			// header("Content-Disposition:inline;filename=".$zp_meta_xml_json[0]->data->filename);
 			header("Content-Disposition:inline;filename=download".explode('/', $zp_content_type)[1]);
-			// @readfile($zp_import_data_url);
-			$content = $wp_filesystem->get_contents( $zp_import_data_url );
+			
+			// Use wp_remote_get with headers instead of wp_filesystem
+			$response = wp_remote_get( $zp_import_data_url, array( 'headers' => $headers ) );
+			
+			if ( is_wp_error($response) ) {
+				echo 'Error: ' . $response->get_error_message();
+			} else {
+				$content = wp_remote_retrieve_body( $response );
 
-			if ( $content !== false )
-				var_dump( $content );
-			else
-				echo 'Could not read the file';
+				if ( $content !== false )
+					var_dump( $content );
+				else
+					echo 'Could not read the file';
+			}
 
 
 			// OLD ------------------------------------->
