@@ -365,11 +365,18 @@ if ( ! class_exists('ZotpressRequest') )
                     || ( isset($zp_results[0]->retrieved)
                             && $this->check_time($zp_results[0]->retrieved) ) )
             {
+                // Check if this is a group account - public groups don't require API keys
+                $is_group = ( strpos( $request_url, "groups/" ) !== false );
+                
                 $headers_arr = array ( "Zotero-API-Version" => "3" );
 
                 // Add API key as header (recommended method per Zotero API docs)
+                // For groups, only add key if we have one - public groups work without keys
                 if ( $this->api_key ) {
                     $headers_arr["Zotero-API-Key"] = $this->api_key;
+                } else if ( $is_group ) {
+                    // For groups without API key, try without key (public groups don't need auth)
+                    error_log("Zotpress: Group request without API key - attempting public group access");
                 }
 
                 if ( count($zp_results) > 0 )
@@ -387,8 +394,9 @@ if ( ! class_exists('ZotpressRequest') )
                 else if ( isset($response["response"]["code"]) ) {
                     $http_code = $response["response"]["code"];
                     if ( $http_code == 403 ) {
-                        // Check if this is a group account
-                        $is_group = ( strpos( $request_url, "groups/" ) !== false );
+                        // Check if this is a group account - check both request_url and original url
+                        $is_group = ( strpos( $request_url, "groups/" ) !== false ) || ( strpos( $url, "groups/" ) !== false );
+                        error_log("Zotpress: 403 error - request_url: " . $request_url . ", original url: " . $url . ", Is Group: " . ($is_group ? "Yes" : "No") . ", Has API Key: " . ($this->api_key ? "Yes" : "No"));
                         if ( $is_group && $this->api_key ) {
                             // For groups, if we get 403 with an API key, try without the key
                             // Public groups don't require authentication per Zotero API docs
@@ -420,7 +428,24 @@ if ( ! class_exists('ZotpressRequest') )
                                 }
                             }
                         } else if ( $is_group ) {
-                            $this->request_error = "Access forbidden. This group may be private and requires an API key with proper permissions.";
+                            // Group but no API key (or invalid key) - try without key first (public groups don't need auth)
+                            error_log("Zotpress: 403 for group without valid API key, retrying without key (public group may not require auth)");
+                            $headers_arr_no_key = array ( "Zotero-API-Version" => "3" );
+                            if ( count($zp_results) > 0 )
+                                $headers_arr_no_key["If-Modified-Since-Version"] = $zp_results[0]->libver;
+                            
+                            $retry_response = wp_remote_get( $request_url, array ( 'headers' => $headers_arr_no_key ) );
+                            
+                            // Check if retry was successful
+                            if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) && $retry_response["response"]["code"] == 200 ) {
+                                // Success! Public group doesn't need API key - use the retry response
+                                $this->request_error = false;
+                                $response = $retry_response; // Use the successful retry response
+                                $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                            } else {
+                                // Still failed, group is private
+                                $this->request_error = "Access forbidden. This group is private and requires an API key with 'Read' or 'Read/Write' permissions. Check your Zotero Settings > Keys and the group's permissions.";
+                            }
                         } else {
                             $this->request_error = "Access forbidden. Check that your API key has proper permissions.";
                         }
