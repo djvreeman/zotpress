@@ -683,6 +683,8 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						&& $zpr["urlwrap"] == "title"
 						&& $item->data->title )
 					{
+						// Wrap title processing in try-catch to handle quotes and special characters
+						try {
 						// First: Get rid of text URL if it appears as text in the citation:
 						// REVIEW: Does this account for all citation styles?
 						/* chicago-author-date */ $item->bib = str_ireplace( htmlentities($item->data->url."."), "", $item->bib ); // Note the period
@@ -766,15 +768,29 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 
 						// If wrapping title, wrap it:
+						// Use esc_attr for URL and esc_html for title to handle quotes safely
 						$item->bib = str_ireplace(
 								$item->data->title,
-								"<a class='zp-ItemURL' ".$zp_target_output."href='".$item->data->url."'>".$item->data->title."</a>",
+								"<a class='zp-ItemURL' ".$zp_target_output."href='".esc_url($item->data->url)."'>".esc_html($item->data->title)."</a>",
 								$item->bib
 							);
 
 						// Finally, revert bib entities:
 						$item->bib = html_entity_decode( $item->bib, ENT_QUOTES, "UTF-8" );
 						$item->data->title = html_entity_decode( $item->data->title, ENT_QUOTES, "UTF-8" );
+						
+						} catch ( Exception $e ) {
+							// Log the error but don't fail the entire request
+							error_log("Zotpress: Error processing title URL wrap for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
+							// Fallback: just hyperlink the URL text instead
+							if ( isset($item->data->url) && strlen($item->data->url) > 0 ) {
+								$item->bib = str_ireplace(
+									htmlentities($item->data->url),
+									"<a class='zp-ItemURL' ".$zp_target_output."href='".esc_url($item->data->url)."'>".esc_html($item->data->url)."</a>",
+									$item->bib
+								);
+							}
+						}
 
 					}
 					else // Just hyperlink the URL text
@@ -1078,8 +1094,24 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				// if ( isset($zp_all_the_data[$id]->data->abstractNote) )
 				// 	$zp_all_the_data[$id]->data->abstractNote = mb_convert_encoding($zp_all_the_data[$id]->data->abstractNote, 'UTF-8', 'UCS-2BE');
 				// 7.4.1: Now appears in another language sometimes ... fix by Jeremy Varnham (@jvarn13)
-				if ( isset($zp_all_the_data[$id]->data->abstractNote) )
-				    $zp_all_the_data[$id]->data->abstractNote = htmlspecialchars($zp_all_the_data[$id]->data->abstractNote, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+				// Process abstractNote and title with error handling for special characters
+				try {
+					if ( isset($zp_all_the_data[$id]->data->abstractNote) )
+						$zp_all_the_data[$id]->data->abstractNote = htmlspecialchars($zp_all_the_data[$id]->data->abstractNote, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+					
+					// Ensure title is properly encoded if it exists
+					if ( isset($zp_all_the_data[$id]->data->title) ) {
+						// Title should already be processed, but ensure it's safe for JSON
+						$zp_all_the_data[$id]->data->title = mb_convert_encoding($zp_all_the_data[$id]->data->title, 'UTF-8', 'UTF-8');
+					}
+				} catch ( Exception $e ) {
+					// Log the error but don't fail the entire request
+					error_log("Zotpress: Error processing abstractNote/title for item " . (isset($zp_all_the_data[$id]->key) ? $zp_all_the_data[$id]->key : 'unknown') . ": " . $e->getMessage());
+					// Ensure at least basic encoding
+					if ( isset($zp_all_the_data[$id]->data->abstractNote) ) {
+						$zp_all_the_data[$id]->data->abstractNote = @htmlspecialchars($zp_all_the_data[$id]->data->abstractNote, ENT_QUOTES, 'UTF-8') ?: '';
+					}
+				}
 			}
 
 			// Re-sort with order of entry if bib and default sort
@@ -1148,15 +1180,62 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		if ( count($zp_all_the_data) > 0
 		 		&& $zp_all_the_data != "" )
 		{
-			$zp_json_encoded = wp_json_encode(
-				array (
-					"status" => "success",
-					"updateneeded" => $zp_updateneeded,
-					"instance" => $zpr["instance_id"],
-					"meta" => $zp_request_meta,
-					"data" => $zp_all_the_data
-				)
-			);
+			// Ensure proper JSON encoding with error handling for titles with quotes
+			try {
+				$zp_json_encoded = wp_json_encode(
+					array (
+						"status" => "success",
+						"updateneeded" => $zp_updateneeded,
+						"instance" => $zpr["instance_id"],
+						"meta" => $zp_request_meta,
+						"data" => $zp_all_the_data
+					),
+					JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+				);
+				
+				// Check for JSON encoding errors
+				if ( $zp_json_encoded === false ) {
+					error_log("Zotpress: JSON encoding error - json_last_error: " . json_last_error_msg());
+					// Fallback: try with basic encoding and sanitize problematic data
+					$sanitized_data = $zp_all_the_data;
+					foreach ( $sanitized_data as $id => $item ) {
+						if ( isset($item->data->title) ) {
+							// Ensure title is properly encoded
+							$sanitized_data[$id]->data->title = mb_convert_encoding($item->data->title, 'UTF-8', 'UTF-8');
+						}
+					}
+					$zp_json_encoded = wp_json_encode(
+						array (
+							"status" => "success",
+							"updateneeded" => $zp_updateneeded,
+							"instance" => $zpr["instance_id"],
+							"meta" => $zp_request_meta,
+							"data" => $sanitized_data
+						)
+					);
+					if ( $zp_json_encoded === false ) {
+						// Last resort: return error
+						throw new Exception("JSON encoding failed after sanitization");
+					}
+				}
+			} catch ( Exception $e ) {
+				// Log the error and return a safe error response
+				error_log("Zotpress: Error encoding JSON output: " . $e->getMessage());
+				if ( $is_ajax ) {
+					$error_response = wp_json_encode(
+						array(
+							"status" => "error",
+							"instance" => $zpr["instance_id"],
+							"meta" => $zp_request_meta,
+							"data" => "Error processing data. Please check server error logs."
+						)
+					);
+					echo $error_response;
+					exit();
+				} else {
+					return "<p>Zotpress Error: Unable to process data. Please check server error logs.</p>";
+				}
+			}
 
 			if ( $is_ajax ) // JS:
 			{

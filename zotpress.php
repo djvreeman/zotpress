@@ -75,7 +75,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     define('ZOTPRESS_PLUGIN_URL', plugin_dir_url( ZOTPRESS_PLUGIN_FILE ));
     define('ZOTPRESS_PLUGIN_DIR', dirname( __FILE__ ));
     define('ZOTPRESS_VERSION', '7.4.3' );
-    define('ZOTPRESS_BUILD', '6' ); // Increment this for each build/change
+    define('ZOTPRESS_BUILD', '7' ); // Increment this for each build/change
 
     // NOTE: Remember to set to TRUE after dev and before version release
     define('ZOTPRESS_LIVEMODE', true );
