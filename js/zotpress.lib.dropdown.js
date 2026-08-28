@@ -62,6 +62,21 @@ jQuery(document).ready(function()
 	} // Zotpress DropDown Library
 
 
+	// Decode bibliography HTML without stripping CSL markup.
+	function zp_decode_bib_html( bib )
+	{
+		if ( ! bib ) return bib;
+		var parsed = new DOMParser().parseFromString( bib, "text/html" );
+		if ( ! parsed.body ) return bib;
+		if ( parsed.body.querySelector(".csl-entry, .csl-left-margin, .csl-right-inline, .csl-bib-body") )
+			return parsed.body.innerHTML;
+		var decoded = parsed.body.textContent;
+		if ( decoded && /<[a-z][\s\S]*>/i.test( decoded ) )
+			return decoded;
+		return parsed.body.innerHTML || bib;
+	}
+
+
 	// Corrects numeric citations
 	function zp_relabel_numbers(zpThisLib)
 	{
@@ -361,8 +376,8 @@ jQuery(document).ready(function()
 								
 				// 7.4: Major change to passing and parsing bib HTML
 				jQuery.each( zp_items.data, function (i, ic) {
-					var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
-					zp_items.data[i].bib = ic_decode.documentElement.textContent;
+					if ( ic && ic.bib )
+						zp_items.data[i].bib = zp_decode_bib_html( ic.bib );
 				});
 
 				// Remove cached bib before adding updates
@@ -571,9 +586,8 @@ jQuery(document).ready(function()
 							var sortby = jQuery(".ZP_SORTBY", zpThisLib).text();
 							var orderby = jQuery(".ZP_ORDER", zpThisLib).text();
 
-							// Re-sort if not numbered and sorting by author or date
-							if ( ["author","date"].indexOf(sortby) !== -1
-									&& jQuery("div.zp-List .csl-left-margin", zpThisLib).length == 0 )
+							// Re-sort when sorting by author or date, then re-number
+							if ( ["author","date"].indexOf(sortby) !== -1 )
 							{
 								var sortOrder = "data-zp-author-year";
 								if ( sortby == "date") sortOrder = "data-zp-year-author";

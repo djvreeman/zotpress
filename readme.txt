@@ -79,6 +79,7 @@ The F.A.Q. can be found on the "Help" page of every Zotpress installation. If yo
 * Preserve Unicode (including ®) when encoding and caching item JSON.
 * Fetch from Zotero on a PHP cache miss instead of leaving the shortcode empty.
 * Guard JSON.parse in bibliography, in-text, library, and search-bar scripts.
+* Reindex numbered citations after each sort/batch so later 50-item requests are not left labeled "1."
 
 = 7.4.4 =
 

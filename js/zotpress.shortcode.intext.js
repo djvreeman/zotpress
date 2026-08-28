@@ -133,8 +133,15 @@ jQuery(document).ready(function()
 				
 				// 7.4: Major change to passing and parsing bib HTML
 				jQuery.each( zp_items.data, function (i, ic) {
-					var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
-					zp_items.data[i].bib = ic_decode.documentElement.textContent;
+					if ( ic && ic.bib ) {
+						var parsed = new DOMParser().parseFromString(ic.bib, "text/html");
+						if ( parsed.body && parsed.body.querySelector(".csl-entry, .csl-left-margin") )
+							zp_items.data[i].bib = parsed.body.innerHTML;
+						else if ( parsed.body && /<[a-z][\s\S]*>/i.test( parsed.body.textContent || "" ) )
+							zp_items.data[i].bib = parsed.body.textContent;
+						else if ( parsed.body )
+							zp_items.data[i].bib = parsed.body.innerHTML;
+					}
 				});
 
 				zp_totalItems += zp_items.data.length;

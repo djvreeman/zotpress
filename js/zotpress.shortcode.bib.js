@@ -171,7 +171,48 @@ jQuery(document).ready(function()
 
 
 
-	// Get list items:
+	// Decode bibliography HTML without stripping CSL markup.
+	// 7.4 used textContent, which turned "<div class='csl-left-margin'>1.</div>"
+	// into a literal "1." that could not be reindexed after later batches.
+	function zp_decode_bib_html( bib )
+	{
+		if ( ! bib ) return bib;
+
+		var parsed = new DOMParser().parseFromString( bib, "text/html" );
+		if ( ! parsed.body ) return bib;
+
+		if ( parsed.body.querySelector(".csl-entry, .csl-left-margin, .csl-right-inline, .csl-bib-body") )
+			return parsed.body.innerHTML;
+
+		var decoded = parsed.body.textContent;
+		if ( decoded && /<[a-z][\s\S]*>/i.test( decoded ) )
+			return decoded;
+
+		return parsed.body.innerHTML || bib;
+	}
+
+
+	// Reindex numbered CSL labels in current visual order.
+	function zp_renumber_csl_entries( $list, $instance )
+	{
+		var $margins = jQuery(".csl-left-margin", $list);
+		if ( $margins.length === 0 ) return;
+
+		var style = jQuery(".ZP_STYLE", $instance).text().trim();
+		if ( style === "american-antiquity" ) return;
+
+		var n = 1;
+		$margins.each( function()
+		{
+			var $el = jQuery(this);
+			var text = $el.text();
+			if ( /\d+/.test( text ) )
+				$el.text( text.replace( /\d+/, n ) );
+			else
+				$el.text( n + "." );
+			n++;
+		});
+	}
 	function zp_get_items ( request_start, request_last, $instance, params, update )
 	{
 		console.log('zp: calling zp_get_items with update check?', update);
@@ -293,8 +334,7 @@ jQuery(document).ready(function()
 					// 7.4: Major change to passing and parsing bib HTML
 					jQuery.each( zp_items.data, function (i, ic) {
 						if ( ic && ic.bib ) {
-							var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
-							zp_items.data[i].bib = ic_decode.documentElement.textContent;
+							zp_items.data[i].bib = zp_decode_bib_html( ic.bib );
 						}
 					});
 					
@@ -473,25 +513,8 @@ jQuery(document).ready(function()
 						}
 
 
-						// Fix incorrect numbering in existing numbered style
-						// Ignore: american-antiquity
-						if ( jQuery("#"+zp_items.instance+" .zp-List .csl-left-margin").length > 0
-								&& ( jQuery(".ZP_STYLE", $instance).text().trim().length > 0
-							 			&& jQuery(".ZP_STYLE", $instance).text().trim() != 'american-antiquity' ) )
-						{
-							params.zpForceNumsCount = 1;
-
-							jQuery("#"+zp_items.instance+" .zp-List .csl-left-margin").each( function( index, item )
-							{
-								var item_content = jQuery(item).text();
-								item_content = item_content.replace( item_content.match(/\d+/)[0], params.zpForceNumsCount );
-								jQuery(item).text( item_content );
-
-								params.zpForceNumsCount++;
-							});
-						}
-
-						// Re-sort, if needed
+						// Sort/group first, then number in the resulting visual order.
+						// Numbering before reformat left new batches stuck as "1."
 						zp_bib_reformat( $instance, zp_items, params );
 
 						// Then, continue with other requests, if they exist:
@@ -739,6 +762,8 @@ jQuery(document).ready(function()
 			}); // each orderedType
 		} // Titles situation
 
+		zp_renumber_csl_entries( jQuery("#"+zp_items.instance+" .zp-List"), $instance );
+
 	} // function zp_bib_reformat()
 
 
@@ -747,15 +772,15 @@ jQuery(document).ready(function()
 	{
 		console.log('zp: running typical sort for instance ', zp_items.instance);
 
-		// Re-sort if not numbered and sorting by author or date
-		if ( ['author', 'date'].indexOf(sortby) !== -1
-				&& jQuery('#'+zp_items.instance+' .zp-List .csl-left-margin').length == 0 )
+		// Re-sort when sorting by author or date. Numbered CSL labels are
+		// rewritten after this in zp_bib_reformat().
+		if ( ['author', 'date'].indexOf(sortby) !== -1 )
 		{
 			jQuery('#'+zp_items.instance+' .zp-List div.zp-Entry').sort(
 				function(a,b)
 				{
-					var an = a.getAttribute(sortOrder).toLowerCase(),
-						bn = b.getAttribute(sortOrder).toLowerCase();
+					var an = (a.getAttribute(sortOrder) || "").toLowerCase(),
+						bn = (b.getAttribute(sortOrder) || "").toLowerCase();
 
 					if (an > bn)
 						if ( orderby == 'asc' )
