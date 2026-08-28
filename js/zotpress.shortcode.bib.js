@@ -60,14 +60,18 @@ jQuery(document).ready(function()
 			}
 
 
-			// else // Use cache
-			// {
-				// First, get encoded/serialized JSON data from PHP:
-				var zp_items = JSON.parse(decodeURIComponent(zp_params.zpJSON));
-				
-				// Then (re)format:
-				zp_bib_reformat( $instance, zp_items, zp_params );
-				console.log('---');
+			if ( zp_params.zpJSON )
+			{
+				try {
+					var zp_items = JSON.parse(decodeURIComponent(zp_params.zpJSON));
+					
+					zp_bib_reformat( $instance, zp_items, zp_params );
+					console.log('---');
+				} catch (e) {
+					console.log('zp: cached bibliography JSON could not be parsed', e);
+					$fromScratch = true;
+				}
+			}
 
 				// Second, check for updates and update, if needed:
 				// TEST: Big changes
@@ -229,7 +233,23 @@ jQuery(document).ready(function()
 			},
 			success: function(data)
 			{
-				var zp_items = jQuery.parseJSON( data );
+				if ( ! data || ( typeof data === "string" && data.trim() === "" ) ) {
+					console.log("zp: empty bibliography response");
+					return;
+				}
+
+				var zp_items;
+				try {
+					zp_items = ( typeof data === "object" ) ? data : jQuery.parseJSON( data );
+				} catch (e) {
+					console.log("zp: bibliography JSON parse error", e);
+					return;
+				}
+
+				if ( ! zp_items || typeof zp_items !== "object" ) {
+					console.log("zp: unexpected bibliography payload", zp_items);
+					return;
+				}
 				
 				// Account for Zotero errors
 				// QUESTION: Did something change? Now have to ref [0]
@@ -265,10 +285,17 @@ jQuery(document).ready(function()
 				// Success! Process as items
 				else
 				{
+					if ( ! zp_items.data || ! Array.isArray(zp_items.data) ) {
+						console.log("zp: bibliography data was not an array", zp_items.data);
+						return;
+					}
+
 					// 7.4: Major change to passing and parsing bib HTML
 					jQuery.each( zp_items.data, function (i, ic) {
-						var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
-						zp_items.data[i].bib = ic_decode.documentElement.textContent;
+						if ( ic && ic.bib ) {
+							var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
+							zp_items.data[i].bib = ic_decode.documentElement.textContent;
+						}
 					});
 					
 					zp_totalItems += zp_items.data.length;

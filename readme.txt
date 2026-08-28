@@ -72,6 +72,14 @@ The F.A.Q. can be found on the "Help" page of every Zotpress installation. If yo
 
 == Changelog ==
 
+= Unreleased =
+
+* Fixed bibliography JSON.parse failures caused by running the AJAX JSON payload through wp_kses. Citation HTML is still sanitized per field.
+* Send Zotero API keys as the Zotero-API-Key header instead of a URL query parameter.
+* Preserve Unicode (including ®) when encoding and caching item JSON.
+* Fetch from Zotero on a PHP cache miss instead of leaving the shortcode empty.
+* Guard JSON.parse in bibliography, in-text, library, and search-bar scripts.
+
 = 7.4.4 =
 
 * Fixed security issue.

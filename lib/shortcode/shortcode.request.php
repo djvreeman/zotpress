@@ -24,6 +24,23 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 	if ( $zpr === false || $zpr == '' )
 		$zpr = Zotpress_prep_ajax_request_vars($wpdb);
 
+	// Reject placeholder collection IDs that leak in from JS ("loading", "false", etc.)
+	if ( isset($zpr["collection_id"]) )
+	{
+		if ( $zpr["collection_id"] === "false" || $zpr["collection_id"] === "False" || $zpr["collection_id"] === "FALSE" )
+		{
+			$zpr["collection_id"] = false;
+		}
+		elseif ( $zpr["collection_id"] !== false && $zpr["collection_id"] !== "" )
+		{
+			$invalid_values = array("loading", "true", "null", "undefined");
+			if ( in_array(strtolower($zpr["collection_id"]), $invalid_values) )
+			{
+				$zpr["collection_id"] = false;
+			}
+		}
+	}
+
 	// Include relevant classes and functions
 	include( dirname(__FILE__) . '/../request/request.class.php' );
 	include( dirname(__FILE__) . '/../request/request.functions.php' );
@@ -213,35 +230,70 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 			{
 				foreach ( $zp_request_account["requests"] as $zp_request_url )
 				{
-					// Check the cache with PHP
+					// Check the cache with PHP; on miss, load from Zotero now
+					// so year-grouped bibliographies are not left empty.
 					if ( $checkcache && ! $zpr["request_update"] )
 					{
 						$zp_checkcache = $zp_import_contents->get_request_cache( $zp_request_url, $zpr["update"] );
-						$zp_checkcache_json = json_decode( $zp_checkcache['json'] );
 
-						if ( gettype($zp_checkcache_json) != 'array'
-								&& property_exists($zp_checkcache_json, 'status')
-								&& $zp_checkcache_json->status == 'No Cache' )
+						if ( gettype($zp_checkcache) == "string"
+						 		&& substr($zp_checkcache, 0, 5) == "Error" )
 						{
-							// $zp_usecache = false;
+							$zp_error = substr($zp_checkcache, 7);
+							continue;
 						}
-						else // Continue as normal with cache
+
+						if ( ! isset($zp_checkcache['json']) )
 						{
-							$zp_imported = $zp_checkcache;
+							$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
 							$zp_usecache = true;
+
+							if ( gettype($zp_imported) == "string"
+							 		&& substr($zp_imported, 0, 5) == "Error" )
+							{
+								$zp_error = substr($zp_imported, 7);
+								continue;
+							}
+
+							if ( isset($zp_imported["updateneeded"]) )
+								$zp_updateneeded = true;
+						}
+						else
+						{
+							$zp_checkcache_json = json_decode( $zp_checkcache['json'] );
+
+							if ( gettype($zp_checkcache_json) != 'array'
+									&& is_object($zp_checkcache_json)
+									&& property_exists($zp_checkcache_json, 'status')
+									&& $zp_checkcache_json->status == 'No Cache' )
+							{
+								$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
+								$zp_usecache = true;
+
+								if ( gettype($zp_imported) == "string"
+								 		&& substr($zp_imported, 0, 5) == "Error" )
+								{
+									$zp_error = substr($zp_imported, 7);
+									continue;
+								}
+
+								if ( isset($zp_imported["updateneeded"]) )
+									$zp_updateneeded = true;
+							}
+							else
+							{
+								$zp_imported = $zp_checkcache;
+								$zp_usecache = true;
+							}
 						}
 					}
 					else // Otherwise, assume JS Ajax
 					{
 						$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
 
-						if ( $zp_imported["updateneeded"] )
+						if ( is_array($zp_imported) && isset($zp_imported["updateneeded"]) )
 							$zp_updateneeded = true;
 					}
-
-					// Stop and let JS Ajax take over
-					if ( $checkcache && ! $zp_usecache )
-						continue;
 
 					// Deal with possible errors
 					if ( gettype($zp_imported) == "string"
@@ -263,23 +315,63 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 			// Just one request
 			else
 			{
-				// First, check the cache with PHP
+				// First, check the cache with PHP; on miss, load from Zotero now
 				if ( $checkcache 
 						&& ! $zpr["request_update"] )
 				{
 					$zp_checkcache = $zp_import_contents->get_request_cache( $zp_request_account["requests"][0], $zpr["update"] );
-					$zp_checkcache_json = json_decode( $zp_checkcache['json'], false );
 
-					if ( gettype($zp_checkcache_json) != 'array'
-							&& property_exists($zp_checkcache_json, 'status')
-							&& $zp_checkcache_json->status == 'No Cache' )
+					if ( gettype($zp_checkcache) == "string"
+					 		&& substr($zp_checkcache, 0, 5) == "Error" )
 					{
-						// $zp_usecache = false;
+						$zp_error = substr($zp_checkcache, 7);
+						continue;
 					}
-					else // Continue as normal with cache
+
+					if ( ! isset($zp_checkcache['json']) )
 					{
-						$zp_imported = $zp_checkcache;
+						$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
+
+						if ( gettype($zp_imported) == "string"
+						 		&& substr($zp_imported, 0, 5) == "Error" )
+						{
+							$zp_error = substr($zp_imported, 7);
+							continue;
+						}
+
 						$zp_usecache = true;
+
+						if ( isset($zp_imported["updateneeded"]) )
+							$zp_updateneeded = true;
+					}
+					else
+					{
+						$zp_checkcache_json = json_decode( $zp_checkcache['json'], false );
+
+						if ( gettype($zp_checkcache_json) != 'array'
+								&& is_object($zp_checkcache_json)
+								&& property_exists($zp_checkcache_json, 'status')
+								&& $zp_checkcache_json->status == 'No Cache' )
+						{
+							$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
+
+							if ( gettype($zp_imported) == "string"
+							 		&& substr($zp_imported, 0, 5) == "Error" )
+							{
+								$zp_error = substr($zp_imported, 7);
+								continue;
+							}
+
+							$zp_usecache = true;
+
+							if ( isset($zp_imported["updateneeded"]) )
+								$zp_updateneeded = true;
+						}
+						else
+						{
+							$zp_imported = $zp_checkcache;
+							$zp_usecache = true;
+						}
 					}
 
 					// if ( $zp_checkcache["updateneeded"] )
@@ -294,14 +386,9 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				{
 					$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
 
-					if ( isset($zp_imported["updateneeded"]) )
+					if ( is_array($zp_imported) && isset($zp_imported["updateneeded"]) )
 						$zp_updateneeded = true;
 				}
-
-				// Stop and let JS Ajax take over
-				if ( ( $checkcache 
-						&& ! $zp_usecache ) )
-					continue;
 				
 				// Deal with possible error
 				if ( gettype($zp_imported) == "string"
@@ -309,9 +396,13 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				{
         			$zp_error = substr($zp_imported, 7, -1);
 				}
+				elseif ( is_array($zp_imported) && ! isset($zp_imported["json"]) )
+				{
+					$zp_error = "Invalid response from Zotero API - missing data";
+				}
 
 				// Create all-requests json if doesn't exists
-				else
+				elseif ( is_array($zp_imported) && isset($zp_imported["json"]) )
 				{
 					if ( empty($zp_request) )
 					{
@@ -325,9 +416,9 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				}
 
 				// 7.4 Update: Might not exist?
-				if ( ! isset($zp_request["json"]) )
+				if ( ! $zp_error && ! isset($zp_request["json"]) )
 					$zp_error = "JSON not found";
-				elseif ( isset($zp_request["json"]) && $zp_request["json"] == "Not found" )
+				elseif ( ! $zp_error && isset($zp_request["json"]) && $zp_request["json"] == "Not found" )
 					$zp_error = $zp_request["json"];
 				
     			// } elseif ( empty($zp_request) ) {
@@ -358,6 +449,10 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		// $temp_data = json_decode( str_replace('\u0000*\u0000','', $temp_data) );
 		$temp_data = json_decode( $zp_request["json"] );
 
+		if ( $temp_data === null || $temp_data === false ) {
+			$temp_data = array();
+		}
+
 		// Figure out if there's multiple requests and how many
 		// if ( $zpr["request_start"] == 0
 		// 		&& ( property_exists($temp_headers, 'link')
@@ -383,10 +478,16 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		
 		// Figure out the next starting position for the next request, if any
 		// 7.3.3: Changed from >= to >
-		if ( $zp_request_meta["request_last"] >= ($zpr["request_start"] + $zpr["limit"]) ) {
+		// Also treat a short/partial batch as the last page.
+		$items_received = is_array($temp_data) ? count($temp_data) : ( is_object($temp_data) ? 1 : 0 );
+		if ( $items_received > 0 && $items_received < $zpr["limit"] ) {
+			$zp_request_meta["request_next"] = false;
+		} elseif ( $zp_request_meta["request_last"] >= ($zpr["request_start"] + $zpr["limit"]) ) {
 
 			// 7.3.9: Only if next is greater than limit
 			$zp_request_meta["request_next"] = $zpr["request_start"] + $zpr["limit"];
+		} else {
+			$zp_request_meta["request_next"] = false;
 		}
 
 		// Overwrite request if limit
@@ -416,15 +517,19 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		// | Format the data |
 		// +-----------------+
 
-		if ( count($temp_data) > 0 )
+		if ( ! is_array($temp_data) && ! is_object($temp_data) ) {
+			$temp_data = array();
+		}
+
+		if ( is_object($temp_data) )
 		{
-			// If single, place the object into an array
-			if ( gettype($temp_data) == "object" )
-			{
-				$temp = $temp_data;
-				$temp_data = array();
-				$temp_data[0] = $temp;
-			}
+			$temp = $temp_data;
+			$temp_data = array();
+			$temp_data[0] = $temp;
+		}
+
+		if ( is_array($temp_data) && count($temp_data) > 0 )
+		{
 
 			// Set up conditional vars
 			if ( $zpr["shownotes"] ) $zp_notes_num = 1;
@@ -433,6 +538,10 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 			// Get individual items
 			foreach ( $temp_data as $item )
 			{
+				if ( ! is_object($item) || ! isset($item->key) ) {
+					continue;
+				}
+
 				// Set target for links
 				$zp_target_output = "";
 				if ( $zpr["target"] )
@@ -1036,7 +1145,19 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		if ( count($zp_all_the_data) > 0
 		 		&& $zp_all_the_data != "" )
 		{
-			$zp_json_encoded = wp_json_encode(
+			// Sanitize citation HTML per item. Do not run wp_kses() on the
+			// JSON string itself — that corrupts quotes and Unicode (®, etc.)
+			// and causes JSON.parse failures in the browser.
+			foreach ( $zp_all_the_data as $id => $item ) {
+				if ( isset( $item->bib ) && is_string( $item->bib ) ) {
+					$zp_all_the_data[ $id ]->bib = wp_kses( $item->bib, zotpress_allowed_bib_html() );
+				}
+				if ( isset( $item->data->title ) && is_string( $item->data->title ) ) {
+					$zp_all_the_data[ $id ]->data->title = zotpress_sanitize_special_chars( $item->data->title, 'title' );
+				}
+			}
+
+			$zp_json_encoded = zotpress_json_encode(
 				array (
 					"status" => "success",
 					"updateneeded" => $zp_updateneeded,
@@ -1048,20 +1169,7 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 			if ( $is_ajax ) // JS:
 			{
-				// echo $zp_json_encoded;
-				echo wp_kses($zp_json_encoded,
-					array(
-						'p' => array(),
-						'i' => array(),
-						'b' => array(),
-						'em' => array(),
-						'strong' => array(),
-						'div' => array(
-							'class' => array(),
-							'style' => array()
-						),
-					)
-				);
+				echo $zp_json_encoded;
 
 				exit(); // REVIEW: Causing to break if error
 			}

@@ -919,8 +919,13 @@ function Zotpress_prep_request_URL( $wpdb, $zpr, $zp_request_queue, $api_user_id
 	// Make sure account was founded (is synced)
 	if ( count($zp_account) > 0 ) {
 
+		$account_type = $zp_account[0]->account_type;
+		if ( $account_type !== "users" && $account_type !== "groups" ) {
+			$account_type = "users";
+		}
+
 		// Basic URL: User type, user id, item type
-		$zp_import_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$api_user_id."/".$zpr["item_type"];
+		$zp_import_url = "https://api.zotero.org/".$account_type."/".$api_user_id."/".$zpr["item_type"];
 
 	    // Deal with item type Items
 	    if ( $zpr['item_type'] == 'items' ) {
@@ -992,10 +997,8 @@ function Zotpress_prep_request_URL( $wpdb, $zpr, $zp_request_queue, $api_user_id
 		
 		$zp_import_url .= "?";
 
-		// Public key, if needed
-		if ( ! is_null($zp_account[0]->public_key) 
-				&& trim($zp_account[0]->public_key) != "" )
-			$zp_import_url .= "key=".$zp_account[0]->public_key."&";
+		// API key is sent as the Zotero-API-Key header in request.class.php
+		// rather than as a query parameter.
 
 		// Style
 		$zp_import_url .= "style=".$zpr["style"];

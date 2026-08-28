@@ -1,4 +1,97 @@
-<?php if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly 
+<?php if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
+
+
+	/**
+	 * Strip control characters and normalize UTF-8 so titles/tags with symbols
+	 * such as ® do not break JSON encoding or later JSON.parse in the browser.
+	 *
+	 * @param mixed  $data The data to sanitize (string, array, or object).
+	 * @param string $type Unused semantically; kept for call-site compatibility.
+	 * @return mixed Sanitized data in the same shape as input.
+	 */
+	if ( ! function_exists( 'zotpress_sanitize_special_chars' ) ) {
+		function zotpress_sanitize_special_chars( $data, $type = 'general' ) {
+			if ( is_array( $data ) ) {
+				$sanitized = array();
+				foreach ( $data as $key => $value ) {
+					$sanitized[ $key ] = zotpress_sanitize_special_chars( $value, $type );
+				}
+				return $sanitized;
+			}
+
+			if ( is_object( $data ) ) {
+				$sanitized = new stdClass();
+				foreach ( get_object_vars( $data ) as $key => $value ) {
+					$sanitized->$key = zotpress_sanitize_special_chars( $value, $type );
+				}
+				return $sanitized;
+			}
+
+			if ( ! is_string( $data ) ) {
+				return $data;
+			}
+
+			if ( function_exists( 'mb_convert_encoding' ) ) {
+				$data = mb_convert_encoding( $data, 'UTF-8', 'UTF-8' );
+			}
+
+			$data = str_replace( "\0", '', $data );
+			$data = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $data );
+			$data = str_replace( array( "\r\n", "\r" ), "\n", $data );
+
+			return $data;
+		}
+	}
+
+	/**
+	 * JSON-encode Zotero payloads without escaping Unicode (®, smart quotes, etc.).
+	 *
+	 * @param mixed $data
+	 * @return string
+	 */
+	if ( ! function_exists( 'zotpress_json_encode' ) ) {
+		function zotpress_json_encode( $data ) {
+			$json = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			if ( $json === false ) {
+				$json = wp_json_encode( $data );
+			}
+			return ( $json === false ) ? '[]' : $json;
+		}
+	}
+
+	/**
+	 * Allowed HTML for CSL bibliography fragments. Used instead of running
+	 * wp_kses() over an entire JSON string, which corrupts the payload.
+	 *
+	 * @return array
+	 */
+	if ( ! function_exists( 'zotpress_allowed_bib_html' ) ) {
+		function zotpress_allowed_bib_html() {
+			return array(
+				'p' => array(),
+				'i' => array(),
+				'em' => array(),
+				'b' => array(),
+				'strong' => array(),
+				'span' => array(
+					'class' => array(),
+					'style' => array(),
+				),
+				'div' => array(
+					'class' => array(),
+					'style' => array(),
+				),
+				'a' => array(
+					'href' => array(),
+					'class' => array(),
+					'style' => array(),
+					'target' => array(),
+					'rel' => array(),
+					'title' => array(),
+				),
+			);
+		}
+	}
 
 
     // +---------------------------------+

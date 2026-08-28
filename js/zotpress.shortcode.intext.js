@@ -49,9 +49,13 @@ jQuery(document).ready(function()
 			// First, get encoded/serialized JSON data from PHP:
 			if ( jQuery(".ZP_JSON", $instance).text().trim().length > 0 )
 			{
-				var zp_items = JSON.parse(decodeURIComponent(zp_params.zpJSON));
-
-				zp_process_intext ($instance, zp_params.zpItemkey, zp_items, zp_params, false);
+				try {
+					var zp_items = JSON.parse(decodeURIComponent(zp_params.zpJSON));
+					zp_process_intext ($instance, zp_params.zpItemkey, zp_items, zp_params, false);
+				} catch (e) {
+					console.log("zp: cached in-text JSON could not be parsed", e);
+					zp_get_items ( 0, 0, $instance, zp_params, false );
+				}
 			}
 			else // Assume no cache:
 			{
@@ -114,7 +118,18 @@ jQuery(document).ready(function()
 			},
 			success: function(data)
 			{
-				var zp_items = jQuery.parseJSON( data );
+				var zp_items;
+				try {
+					zp_items = ( typeof data === "object" ) ? data : jQuery.parseJSON( data );
+				} catch (e) {
+					console.log("zp: in-text JSON parse error", e);
+					return;
+				}
+
+				if ( ! zp_items || ! zp_items.data || ! Array.isArray(zp_items.data) ) {
+					console.log("zp: unexpected in-text payload", zp_items);
+					return;
+				}
 				
 				// 7.4: Major change to passing and parsing bib HTML
 				jQuery.each( zp_items.data, function (i, ic) {

@@ -180,10 +180,16 @@ jQuery(document).ready(function()
 								},
 								success: function(data)
 								{
-									var zp_items = jQuery.parseJSON( data );
+									var zp_items;
+									try {
+										zp_items = ( typeof data === "object" ) ? data : jQuery.parseJSON( data );
+									} catch (e) {
+										console.log("zp: searchbar JSON parse error", e);
+										return;
+									}
 
 									// 7.4.4: Can throw empty if term not found
-									if ( zp_items.status != "empty" ) {
+									if ( zp_items && zp_items.status != "empty" ) {
 																			
 										// 7.4: Major change to passing and parsing bib HTML
 										jQuery.each( zp_items.data, function (i, ic) {

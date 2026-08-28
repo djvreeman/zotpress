@@ -79,8 +79,15 @@ a.zp-DownloadURL:after {
 
 /* START OF BROWSE LIB */
 
-.ZP_ATTR {
-    display: none;
+.ZP_ATTR,
+.ZP_JSON {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
 }
 
 .zp-Browse-Bar {

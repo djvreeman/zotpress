@@ -110,7 +110,15 @@ jQuery(document).ready(function()
 			},
 			success: function(data)
 			{
-				var zp_collections = jQuery.parseJSON( data );
+				var zp_collections;
+				try {
+					zp_collections = ( typeof data === "object" ) ? data : jQuery.parseJSON( data );
+				} catch (e) {
+					console.log("zp: collections JSON parse error", e);
+					jQuery("select.zp-Browse-Collections-Select", zpThisLib).removeClass("loading").find(".loading").remove();
+					return;
+				}
+
 				var zp_collection_options = "";
 
 				// Remove cached bib before adding updates
@@ -216,7 +224,13 @@ jQuery(document).ready(function()
 			},
 			success: function(data)
 			{
-				var zp_tags = jQuery.parseJSON( data );
+				var zp_tags;
+				try {
+					zp_tags = ( typeof data === "object" ) ? data : jQuery.parseJSON( data );
+				} catch (e) {
+					console.log("zp: tags JSON parse error", e);
+					return;
+				}
 
 				var zp_tag_options = "<option class='zp-List-Tags-Select' name='zp-List-Tags-Select'>--"+zpShortcodeAJAX.txt_notagsel+"--</option>\n";
 				if ( zpThisLibProps.zpTagId ) zp_tag_options = "<option value='toplevel' class='toplevel'>--"+zpShortcodeAJAX.txt_unsettag+"--</option>\n";
@@ -332,7 +346,18 @@ jQuery(document).ready(function()
 			},
 			success: function(data)
 			{
-				var zp_items = jQuery.parseJSON( data );
+				var zp_items;
+				try {
+					zp_items = ( typeof data === "object" ) ? data : jQuery.parseJSON( data );
+				} catch (e) {
+					console.log("zp: library items JSON parse error", e);
+					return;
+				}
+
+				if ( ! zp_items || ! zp_items.data || ! Array.isArray(zp_items.data) ) {
+					console.log("zp: unexpected library items payload", zp_items);
+					return;
+				}
 								
 				// 7.4: Major change to passing and parsing bib HTML
 				jQuery.each( zp_items.data, function (i, ic) {
