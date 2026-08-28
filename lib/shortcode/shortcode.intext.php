@@ -17,7 +17,8 @@ function Zotpress_zotpressInText ($atts)
     *
     */
 
-    extract(shortcode_atts(array(
+    // extract(shortcode_atts(array(
+    $atts = shortcode_atts(array(
 
         'item' => false,
         'items' => false,
@@ -34,38 +35,64 @@ function Zotpress_zotpressInText ($atts)
         'nickname' => false,
         'nick' => false
 
-    ), $atts));
+    ), $atts);
+
+    global $post, $wpdb;
 
 
-    // PREPARE ATTRIBUTES
-    if ( $items )
-        $items = zotpress_strip_quotes( str_replace(" ", "", $items ));
-    elseif ( $item )
-        $items = zotpress_strip_quotes( str_replace(" ", "", $item ));
+    // +---------------------------+
+    // | FORMAT & CLEAN PARAMETERS |
+    // +---------------------------+
 
-    $pages = zotpress_strip_quotes( $pages );
-    $format = zotpress_strip_quotes( $format );
-    $brackets = zotpress_strip_quotes( $brackets );
+    if ( $atts['items'] )
+        $atts['items'] = zotpress_strip_quotes( str_replace(" ", "", $atts['items'] ));
+    elseif ( $atts['item'] )
+        $atts['items'] = zotpress_strip_quotes( str_replace(" ", "", $atts['item'] ));
 
-    $etal = zotpress_strip_quotes( $etal );
-    if ( $etal == "default" ) $etal = false;
+    // 7.4.3 via 3.9.10: Use the Zotpress_prep_ajax_request_vars() function on intext
+    $zpr = Zotpress_prep_ajax_request_vars($wpdb, $atts);
 
-    $separator = zotpress_strip_quotes( $separator );
-    if ( $separator == "default" ) $separator = false;
+    $items = $atts['items'];
 
-    $and = zotpress_strip_quotes( $and );
-    if ( $and == "default" ) $and = false;
+    $pages = $zpr['pages']; // 7.4.3: Is this used?
+    $format = $zpr['format'];
+    $brackets = $zpr['brackets'];
+    $etal = $zpr['etal'];
+    $separator = $zpr['separator'];
+    $and = $zpr['and'];
 
-    if ( $userid ) $api_user_id = zotpress_strip_quotes( $userid );
-    if ( $nickname ) $nickname = zotpress_strip_quotes( $nickname );
-    if ( $nick ) $nickname = zotpress_strip_quotes( $nick );
+    $api_user_id = $zpr['api_user_id'];
+    $nickname = $zpr['nickname'];
 
+
+    // // PREPARE ATTRIBUTES
+    // if ( $items )
+    //     $items = zotpress_strip_quotes( str_replace(" ", "", $items ));
+    // elseif ( $item )
+    //     $items = zotpress_strip_quotes( str_replace(" ", "", $item ));
+
+    // $pages = zotpress_strip_quotes( $pages );
+    // $format = zotpress_strip_quotes( $format );
+    // $brackets = zotpress_strip_quotes( $brackets );
+
+    // $etal = zotpress_strip_quotes( $etal );
+    // if ( $etal == "default" ) $etal = false;
+
+    // $separator = zotpress_strip_quotes( $separator );
+    // if ( $separator == "default" ) $separator = false;
+
+    // $and = zotpress_strip_quotes( $and );
+    // if ( $and == "default" ) $and = false;
+
+    // if ( $userid ) $api_user_id = zotpress_strip_quotes( $userid );
+    // if ( $nickname ) $nickname = zotpress_strip_quotes( $nickname );
+    // if ( $nick ) $nickname = zotpress_strip_quotes( $nick );
 
 
     // GET ACCOUNTS
 
-    global $wpdb;
-    global $post;
+    // global $wpdb;
+    // global $post;
 
     // Turn on/off minified versions if testing/live
     $minify = ''; if ( ZOTPRESS_LIVEMODE ) $minify = '.min';
@@ -76,7 +103,6 @@ function Zotpress_zotpressInText ($atts)
 
     if ( $nickname !== false )
     {
-        // $zp_account = $wpdb->get_row("SELECT * FROM ".$wpdb->prefix."zotpress WHERE nickname='".$nickname."'", OBJECT);
         $zp_account = $wpdb->get_row(
             $wpdb->prepare(
                 "
@@ -92,7 +118,6 @@ function Zotpress_zotpressInText ($atts)
     }
     elseif ( $api_user_id !== false )
     {
-        // $zp_account = $wpdb->get_row("SELECT * FROM ".$wpdb->prefix."zotpress WHERE api_user_id='".$api_user_id."'", OBJECT);
         $zp_account = $wpdb->get_row(
             $wpdb->prepare(
                 "
@@ -112,7 +137,7 @@ function Zotpress_zotpressInText ($atts)
         if ( get_option("Zotpress_DefaultAccount") !== false )
         {
             $api_user_id = get_option("Zotpress_DefaultAccount");
-            // $zp_account = $wpdb->get_row("SELECT * FROM ".$wpdb->prefix."zotpress WHERE api_user_id ='".$api_user_id."'", OBJECT);
+
             $zp_account = $wpdb->get_row(
                 $wpdb->prepare(
                     "
@@ -155,9 +180,9 @@ function Zotpress_zotpressInText ($atts)
     // if ( strpos( $items, $api_user_id ) === false ) // WRONG: assumes default/global api_user_id rather than the one for this shortcode
     if ( strpos( $items, ":" ) === false )
     {
-        if (strpos( $items, "{" ) !== false) {
+        if ( strpos( $items, "{" ) !== false ) {
             $items = str_replace( "{", "{".$api_user_id.":", $items );
-        } elseif (strpos( $items, "," ) !== false) {
+        } elseif ( strpos( $items, "," ) !== false ) {
             $items = "{".$api_user_id.":" . str_replace( ",", "},{".$api_user_id.":", $items )."}";
         } else // assume unformatted and single, so place at front
         {
@@ -233,10 +258,7 @@ function Zotpress_zotpressInText ($atts)
 
     // Determine if all items are np
     if ( $all_np )
-    {
-        // $all_page_instances = array("np");
         $all_page_instances_str = "np";
-    }
 
     // Then, add the instance to the array
     // REVIEW: Don't need api_user_id ... or maybe need multiple?

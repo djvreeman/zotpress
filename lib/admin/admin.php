@@ -93,19 +93,13 @@ function Zotpress_process_accounts_AJAX()
 
             if ( isset($_GET['public_key'])
                     && $_GET['public_key'] != "" )
-            {
                 if ( preg_match("/^[0-9a-zA-Z]+$/", sanitize_text_field(wp_unslash($_GET['public_key']))) == 1) {
                     $public_key = trim(sanitize_text_field(wp_unslash($_GET['public_key'])));
                 } elseif ( $account_type == "users" ) {
                     $errors['public_key_format'][0] = 1;
+                } elseif ( $account_type == "users" ) {
+                    $errors['public_key_blank'][0] = 1;
                 }
-                // Note: Groups may have different key formats or requirements
-            }
-            elseif ( $account_type == "users" ) {
-                // Public key is required for user accounts
-                $errors['public_key_blank'][0] = 1;
-            }
-            // Groups may not require a public key in some cases, but it's recommended
 
             // NICKNAME
             $nickname = false;
@@ -323,6 +317,46 @@ function Zotpress_process_accounts_AJAX()
         }
 
 
+        // +-------------------------+
+        // | SET DEFAULT CACHE TIMER |
+        // +-------------------------+
+
+        elseif ( isset($_GET['action_type'])
+                && $_GET['action_type'] == "default_cachetimer" )
+        {
+            // $xml .= "<result success='true' cache_timer='".$_GET['cache_timer']."' />\n";
+
+            $errors = array("cachetimer_empty"=>array(0,"<strong>Cache Timer</strong> was left blank."),
+                            "cachetimer_format"=>array(0,"<strong>Cache Timer</strong> was incorrectly formatted."));
+
+            // Check the post variables and record errors
+            if ( trim(sanitize_text_field(wp_unslash($_GET['cache_timer']))) != '' )
+                if ( preg_match('/^[\'0-9]+$/', stripslashes(sanitize_text_field(wp_unslash($_GET['cache_timer'])))) == 1 )
+                    $cache_timer = str_replace("'","",str_replace(" ","",trim(urldecode(sanitize_text_field(wp_unslash($_GET['cache_timer']))))));
+                else
+                    $errors['cachetimer_format'][0] = 1;
+            else
+                $errors['cachetimer_empty'][0] = 1;
+
+            // CHECK ERRORS
+            $errorCheck = false;
+
+            foreach ( $errors as $field => $error ) {
+                if ( $error[0] == 1 ) {
+                    $errorCheck = true;
+                    break;
+                }
+            }
+
+            // SET DEFAULT CACHE TIMER
+            if ( $errorCheck === false )
+            {
+                update_option( "Zotpress_DefaultCacheTimer", $cache_timer );
+                $xml .= "<result success='true' cache_timer='".$cache_timer."' />\n";
+            }
+        }
+
+
         // +------------------------------+
         // | SET REFERENCE WIDGET FOR CPT |
         // +------------------------------+
@@ -353,7 +387,7 @@ function Zotpress_process_accounts_AJAX()
                 }
             }
 
-            // SET DEFAULT ACCOUNT
+            // SET DEFAULT CPT
             if ( $errorCheck === false )
             {
                 update_option("Zotpress_DefaultCPT", $cpt);
@@ -596,6 +630,7 @@ function Zotpress_process_accounts_AJAX()
                 'item_key' => array(),
                 'reset' => array(),
                 'cpt' => array(),
+                'cache_timer' => array(),
                 'api_user_id' => array(),
                 'public_key' => array(),
                 'total_accounts' => array(),

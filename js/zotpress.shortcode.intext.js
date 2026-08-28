@@ -114,55 +114,13 @@ jQuery(document).ready(function()
 			},
 			success: function(data)
 			{
-				// Validate JSON before parsing
-				if (!data || data.trim() === '') {
-					console.log("zp: Empty intext response received");
-					jQuery(".zp-Zotpress-InTextBib", $instance).removeClass("loading");
-					jQuery(".zp-Zotpress-InTextBib", $instance).find(".zp_display_progress").remove();
-					jQuery(".zp-Zotpress-InTextBib", $instance).append("<p>No data received from server</p>\n");
-					return;
-				}
-
-				var zp_items;
-				try {
-					zp_items = jQuery.parseJSON( data );
-				} catch (e) {
-					console.log("zp: InText JSON parsing error:", e);
-					console.log("zp: Raw intext response data:", data);
-					console.log("zp: Response length:", data.length);
-					console.log("zp: Response preview:", data.substring(0, 200) + "...");
-					
-					jQuery(".zp-Zotpress-InTextBib", $instance).removeClass("loading");
-					jQuery(".zp-Zotpress-InTextBib", $instance).find(".zp_display_progress").remove();
-					jQuery(".zp-Zotpress-InTextBib", $instance).append("<p>Error loading intext citations: Invalid response from server</p>\n");
-					return;
-				}
-				
-				// Check for error status before processing data
-				if ( zp_items.status === 'error' ) {
-					console.log("zp: Server returned error:", zp_items.data);
-					jQuery(".zp-Zotpress-InTextBib", $instance).removeClass("loading");
-					jQuery(".zp-Zotpress-InTextBib", $instance).find(".zp_display_progress").remove();
-					jQuery(".zp-Zotpress-InTextBib", $instance).append("<p>Error: " + zp_items.data + "</p>\n");
-					return;
-				}
-				
-				// Check for empty status
-				if ( zp_items.status === 'empty' ) {
-					console.log("zp: No items found");
-					jQuery(".zp-Zotpress-InTextBib", $instance).removeClass("loading");
-					jQuery(".zp-Zotpress-InTextBib", $instance).find(".zp_display_progress").remove();
-					jQuery(".zp-Zotpress-InTextBib", $instance).append("<p>No items found</p>\n");
-					return;
-				}
+				var zp_items = jQuery.parseJSON( data );
 				
 				// 7.4: Major change to passing and parsing bib HTML
-				if ( zp_items.data && Array.isArray(zp_items.data) ) {
-					jQuery.each( zp_items.data, function (i, ic) {
-						var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
-						zp_items.data[i].bib = ic_decode.documentElement.textContent;
-					});
-				}
+				jQuery.each( zp_items.data, function (i, ic) {
+					var ic_decode = new DOMParser().parseFromString(ic.bib, "text/html");
+					zp_items.data[i].bib = ic_decode.documentElement.textContent;
+				});
 
 				zp_totalItems += zp_items.data.length;
 				if ( update ) console.log("zp: running update for items:",zp_totalItems,"->",zp_items.data.length);
@@ -255,7 +213,9 @@ jQuery(document).ready(function()
 
 
 				// Then, continue with other requests, if they exist
-				if ( zp_items.meta.request_next != false 
+				if ( zp_items.hasOwnProperty("meta") 
+						&& zp_items.meta.hasOwnProperty("request_next") 
+						&& zp_items.meta.request_next != false 
 						&& zp_items.meta.request_next != "false" )
 				{
 					zp_get_items ( zp_items.meta.request_next, zp_items.meta.request_last, $instance, params, update );
@@ -587,7 +547,8 @@ jQuery(document).ready(function()
 					}
 
 					// Get year or n.d.
-					if ( item_data[item.key].meta.hasOwnProperty("parsedDate") )
+					if ( item_data[item.key].hasOwnProperty("meta")
+							&& item_data[item.key].meta.hasOwnProperty("parsedDate") )
 						item_year = item_data[item.key].meta.parsedDate.substring(0, 4);
 					else
 						item_year = "n.d.";
@@ -719,14 +680,17 @@ jQuery(document).ready(function()
 				// REVIEW: Assumes abbr. author plus full date is "unique"
 				var tempItemDate = "0000";
 				var tempItemYear = "0000";
-				if ( item_data[item.key].meta.hasOwnProperty('parsedDate') ) {
+				if ( item_data[item.key].hasOwnProperty("meta") 
+						&& item_data[item.key].meta.hasOwnProperty('parsedDate') )
+				{
 					tempItemDate = item_data[item.key].meta.parsedDate;
 					tempItemYear = item_data[item.key].meta.parsedDate.substring(0, 4);
 				}
 	
 				// Author
 				var tempAuthor = "";
-				if ( item_data[item.key].meta.hasOwnProperty('creatorSummary') )
+				if ( item_data[item.key].hasOwnProperty("meta") 
+						&& item_data[item.key].meta.hasOwnProperty('creatorSummary') )
 					tempAuthor = item_data[item.key].meta.creatorSummary.replace( /['" ]/g, "-" );
 	
 				intext_citation[cindex]["year"] = tempItemYear;
@@ -808,14 +772,16 @@ jQuery(document).ready(function()
 			var tempItemYear = "0000";
 			// if ( item.data.hasOwnProperty('date') )
 			// 	tempItemDate = item.data.date;
-			if ( item.meta.hasOwnProperty('parsedDate') ) {
+			if ( item.hasOwnProperty("meta")
+					&& item.meta.hasOwnProperty('parsedDate') ) {
 				tempItemDate = item.meta.parsedDate;
 				tempItemYear = item.meta.parsedDate.substring(0, 4);
 			}
 
 			// Author
 			var tempAuthor = "";
-			if ( item.meta.hasOwnProperty('creatorSummary') )
+			if ( item.hasOwnProperty("meta")
+					&& item.meta.hasOwnProperty('creatorSummary') )
 				tempAuthor = item.meta.creatorSummary.replace( /['" ]/g, "-" );
 
 			// Title

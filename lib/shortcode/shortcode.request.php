@@ -16,9 +16,6 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 	if ( $is_ajax )
 		check_ajax_referer( 'zpShortcode_nonce_val', 'zpShortcode_nonce' );
-	
-	// Wrap in try-catch to handle any PHP errors gracefully
-	try {
 
 	// Set up database
 	global $wpdb, $post;
@@ -26,25 +23,6 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 	// Prep request vars
 	if ( $zpr === false || $zpr == '' )
 		$zpr = Zotpress_prep_ajax_request_vars($wpdb);
-	
-	// Validate and sanitize collection_id - reject invalid values like "loading" or string "false"
-	if ( isset($zpr["collection_id"]) )
-	{
-		// Convert string "false" to boolean false
-		if ( $zpr["collection_id"] === "false" || $zpr["collection_id"] === "False" || $zpr["collection_id"] === "FALSE" )
-		{
-			$zpr["collection_id"] = false;
-		}
-		// Reject other invalid values
-		elseif ( $zpr["collection_id"] !== false && $zpr["collection_id"] !== "" )
-		{
-			$invalid_values = array("loading", "true", "null", "undefined");
-			if ( in_array(strtolower($zpr["collection_id"]), $invalid_values) )
-			{
-				$zpr["collection_id"] = false;
-			}
-		}
-	}
 
 	// Include relevant classes and functions
 	include( dirname(__FILE__) . '/../request/request.class.php' );
@@ -239,64 +217,18 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 					if ( $checkcache && ! $zpr["request_update"] )
 					{
 						$zp_checkcache = $zp_import_contents->get_request_cache( $zp_request_url, $zpr["update"] );
-						
-						// Check if get_request_cache returned an error string
-						if ( gettype($zp_checkcache) == "string"
-						 		&& substr($zp_checkcache, 0, 5) == "Error" )
-						{
-							$zp_error = substr($zp_checkcache, 7);
-							continue;
-						}
-						
-						// Check if cache data exists and is valid
-						if ( ! isset($zp_checkcache['json']) )
-						{
-							// No cache data - load it now
-							$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
-							
-							// Check if get_request_contents returned an error
-							if ( gettype($zp_imported) == "string"
-							 		&& substr($zp_imported, 0, 5) == "Error" )
-							{
-								$zp_error = substr($zp_imported, 7);
-								continue;
-							}
-							
-							$zp_usecache = false;
-							
-							if ( isset($zp_imported["updateneeded"]) )
-								$zp_updateneeded = true;
-						}
-						else
-						{
-							$zp_checkcache_json = json_decode( $zp_checkcache['json'] );
+						$zp_checkcache_json = json_decode( $zp_checkcache['json'] );
 
-							if ( gettype($zp_checkcache_json) != 'array'
-									&& is_object($zp_checkcache_json)
-									&& property_exists($zp_checkcache_json, 'status')
-									&& $zp_checkcache_json->status == 'No Cache' )
-							{
-								// No cache exists - load it now so it gets cached for next time
-								$zp_imported = $zp_import_contents->get_request_contents( $zp_request_url, $zpr["update"] );
-								
-								// Check if get_request_contents returned an error
-								if ( gettype($zp_imported) == "string"
-								 		&& substr($zp_imported, 0, 5) == "Error" )
-								{
-									$zp_error = substr($zp_imported, 7);
-									continue;
-								}
-								
-								$zp_usecache = false; // We just loaded it, so mark as not using cache
-								
-								if ( isset($zp_imported["updateneeded"]) )
-									$zp_updateneeded = true;
-							}
-							else // Continue as normal with cache
-							{
-								$zp_imported = $zp_checkcache;
-								$zp_usecache = true;
-							}
+						if ( gettype($zp_checkcache_json) != 'array'
+								&& property_exists($zp_checkcache_json, 'status')
+								&& $zp_checkcache_json->status == 'No Cache' )
+						{
+							// $zp_usecache = false;
+						}
+						else // Continue as normal with cache
+						{
+							$zp_imported = $zp_checkcache;
+							$zp_usecache = true;
 						}
 					}
 					else // Otherwise, assume JS Ajax
@@ -306,6 +238,10 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						if ( $zp_imported["updateneeded"] )
 							$zp_updateneeded = true;
 					}
+
+					// Stop and let JS Ajax take over
+					if ( $checkcache && ! $zp_usecache )
+						continue;
 
 					// Deal with possible errors
 					if ( gettype($zp_imported) == "string"
@@ -332,64 +268,18 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						&& ! $zpr["request_update"] )
 				{
 					$zp_checkcache = $zp_import_contents->get_request_cache( $zp_request_account["requests"][0], $zpr["update"] );
-					
-					// Check if get_request_cache returned an error string
-					if ( gettype($zp_checkcache) == "string"
-					 		&& substr($zp_checkcache, 0, 5) == "Error" )
-					{
-						$zp_error = substr($zp_checkcache, 7);
-						continue;
-					}
-					
-					// Check if cache data exists and is valid
-					if ( ! isset($zp_checkcache['json']) )
-					{
-						// No cache data - load it now
-						$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
-						
-						// Check if get_request_contents returned an error
-						if ( gettype($zp_imported) == "string"
-						 		&& substr($zp_imported, 0, 5) == "Error" )
-						{
-							$zp_error = substr($zp_imported, 7);
-							continue;
-						}
-						
-						$zp_usecache = false;
-						
-						if ( isset($zp_imported["updateneeded"]) )
-							$zp_updateneeded = true;
-					}
-					else
-					{
-						$zp_checkcache_json = json_decode( $zp_checkcache['json'], false );
+					$zp_checkcache_json = json_decode( $zp_checkcache['json'], false );
 
-						if ( gettype($zp_checkcache_json) != 'array'
-								&& is_object($zp_checkcache_json)
-								&& property_exists($zp_checkcache_json, 'status')
-								&& $zp_checkcache_json->status == 'No Cache' )
-						{
-							// No cache exists - load it now so it gets cached for next time
-							$zp_imported = $zp_import_contents->get_request_contents( $zp_request_account["requests"][0], $zpr["update"] );
-							
-							// Check if get_request_contents returned an error
-							if ( gettype($zp_imported) == "string"
-							 		&& substr($zp_imported, 0, 5) == "Error" )
-							{
-								$zp_error = substr($zp_imported, 7);
-								continue;
-							}
-							
-							$zp_usecache = false; // We just loaded it, so mark as not using cache
-							
-							if ( isset($zp_imported["updateneeded"]) )
-								$zp_updateneeded = true;
-						}
-						else // Continue as normal with cache
-						{
-							$zp_imported = $zp_checkcache;
-							$zp_usecache = true;
-						}
+					if ( gettype($zp_checkcache_json) != 'array'
+							&& property_exists($zp_checkcache_json, 'status')
+							&& $zp_checkcache_json->status == 'No Cache' )
+					{
+						// $zp_usecache = false;
+					}
+					else // Continue as normal with cache
+					{
+						$zp_imported = $zp_checkcache;
+						$zp_usecache = true;
 					}
 
 					// if ( $zp_checkcache["updateneeded"] )
@@ -407,6 +297,11 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 					if ( isset($zp_imported["updateneeded"]) )
 						$zp_updateneeded = true;
 				}
+
+				// Stop and let JS Ajax take over
+				if ( ( $checkcache 
+						&& ! $zp_usecache ) )
+					continue;
 				
 				// Deal with possible error
 				if ( gettype($zp_imported) == "string"
@@ -414,15 +309,9 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				{
         			$zp_error = substr($zp_imported, 7, -1);
 				}
-				// Check if zp_imported is an array but missing required keys
-				elseif ( is_array($zp_imported) && ! isset($zp_imported["json"]) )
-				{
-					// Log for debugging
-					error_log("Zotpress: get_request_contents returned array without 'json' key. Keys: " . implode(", ", array_keys($zp_imported)));
-					$zp_error = "Invalid response from Zotero API - missing data";
-				}
+
 				// Create all-requests json if doesn't exists
-				elseif ( is_array($zp_imported) && isset($zp_imported["json"]) )
+				else
 				{
 					if ( empty($zp_request) )
 					{
@@ -434,23 +323,12 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						$zp_request["json"] = rtrim($zp_request["json"], "]") . "," . ltrim($zp_imported["json"], "[") . "]";
 					}
 				}
-				else
-				{
-					// Unexpected response type
-					error_log("Zotpress: Unexpected response type from get_request_contents: " . gettype($zp_imported));
-					$zp_error = "Unexpected response from server";
-				}
 
-				// 7.4 Update: Only check for JSON if no error was set and request was populated
-				if ( ! $zp_error && ! isset($zp_request["json"]) )
-				{
-					error_log("Zotpress: zp_request array exists but 'json' key is missing. Keys: " . (isset($zp_request) && is_array($zp_request) ? implode(", ", array_keys($zp_request)) : "not an array"));
+				// 7.4 Update: Might not exist?
+				if ( ! isset($zp_request["json"]) )
 					$zp_error = "JSON not found";
-				}
-				elseif ( ! $zp_error && isset($zp_request["json"]) && $zp_request["json"] == "Not found" )
-				{
+				elseif ( isset($zp_request["json"]) && $zp_request["json"] == "Not found" )
 					$zp_error = $zp_request["json"];
-				}
 				
     			// } elseif ( empty($zp_request) ) {
 			    //     $zp_request = $zp_imported;
@@ -479,14 +357,6 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		// $temp_data = json_encode( (array)$zp_request["json"] );
 		// $temp_data = json_decode( str_replace('\u0000*\u0000','', $temp_data) );
 		$temp_data = json_decode( $zp_request["json"] );
-		
-		// Handle cases where json_decode returns null or false (invalid JSON, empty response, etc.)
-		// This can happen with the last partial batch or if there's an error
-		if ( $temp_data === null || $temp_data === false ) {
-			error_log("Zotpress: json_decode returned null/false for request_start=" . $zpr["request_start"] . ", limit=" . $zpr["limit"]);
-			// Set to empty array to prevent errors
-			$temp_data = array();
-		}
 
 		// Figure out if there's multiple requests and how many
 		// if ( $zpr["request_start"] == 0
@@ -513,23 +383,10 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		
 		// Figure out the next starting position for the next request, if any
 		// 7.3.3: Changed from >= to >
-		// Also check if we actually received fewer items than requested (partial batch)
-		$items_received = is_array($temp_data) ? count($temp_data) : (is_object($temp_data) ? 1 : 0);
-		$expected_items = $zpr["limit"];
-		
-		// If we received fewer items than requested, this is likely the last batch
-		if ( $items_received > 0 && $items_received < $expected_items ) {
-			// This is a partial batch - likely the last one
-			// Don't set request_next, as there are no more items
-			$zp_request_meta["request_next"] = false;
-			error_log("Zotpress: Partial batch detected - received " . $items_received . " items (expected " . $expected_items . ") at start=" . $zpr["request_start"]);
-		} elseif ( $zp_request_meta["request_last"] >= ($zpr["request_start"] + $zpr["limit"]) ) {
-			// Full batch received, check if there are more items
+		if ( $zp_request_meta["request_last"] >= ($zpr["request_start"] + $zpr["limit"]) ) {
+
 			// 7.3.9: Only if next is greater than limit
 			$zp_request_meta["request_next"] = $zpr["request_start"] + $zpr["limit"];
-		} else {
-			// No more items
-			$zp_request_meta["request_next"] = false;
 		}
 
 		// Overwrite request if limit
@@ -559,38 +416,23 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		// | Format the data |
 		// +-----------------+
 
-		// Ensure $temp_data is an array and has items
-		// Handle partial batches (e.g., last batch with fewer items than limit)
-		if ( ! is_array($temp_data) && ! is_object($temp_data) ) {
-			$temp_data = array();
-		}
-		
-		// Convert object to array if needed
-		if ( is_object($temp_data) ) {
-			$temp = $temp_data;
-			$temp_data = array();
-			$temp_data[0] = $temp;
-		}
-		
-		// Now check if we have any data to process
-		if ( is_array($temp_data) && count($temp_data) > 0 )
+		if ( count($temp_data) > 0 )
 		{
+			// If single, place the object into an array
+			if ( gettype($temp_data) == "object" )
+			{
+				$temp = $temp_data;
+				$temp_data = array();
+				$temp_data[0] = $temp;
+			}
 
 			// Set up conditional vars
 			if ( $zpr["shownotes"] ) $zp_notes_num = 1;
 			if ( $zpr["showimage"] ) $zp_showimage_keys = "";
 
 			// Get individual items
-			// Wrap in try-catch to handle any issues with individual items in partial batches
 			foreach ( $temp_data as $item )
 			{
-				// Skip if item is null or invalid
-				if ( ! is_object($item) || ! isset($item->key) ) {
-					error_log("Zotpress: Skipping invalid item in batch at start=" . $zpr["request_start"]);
-					continue;
-				}
-				
-				try {
 				// Set target for links
 				$zp_target_output = "";
 				if ( $zpr["target"] )
@@ -710,15 +552,6 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 					$item->bib = str_ireplace("In ", "", $item->bib);
 				}
 
-				// Sanitize title before processing (handles quotes, brackets, special chars)
-				try {
-					if ( isset($item->data->title) && is_string($item->data->title) ) {
-						$item->data->title = zotpress_sanitize_special_chars( $item->data->title, 'title' );
-					}
-				} catch ( Exception $e ) {
-					error_log("Zotpress: Error sanitizing title for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
-				}
-
 				// Hyperlink or URL Wrap
 				if ( isset($item->data->url)
 					// && $item->data->url !== null
@@ -728,8 +561,6 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						&& $zpr["urlwrap"] == "title"
 						&& $item->data->title )
 					{
-						// Wrap title processing in try-catch to handle quotes and special characters
-						try {
 						// First: Get rid of text URL if it appears as text in the citation:
 						// REVIEW: Does this account for all citation styles?
 						/* chicago-author-date */ $item->bib = str_ireplace( htmlentities($item->data->url."."), "", $item->bib ); // Note the period
@@ -813,29 +644,15 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 
 						// If wrapping title, wrap it:
-						// Use esc_attr for URL and esc_html for title to handle quotes safely
 						$item->bib = str_ireplace(
 								$item->data->title,
-								"<a class='zp-ItemURL' ".$zp_target_output."href='".esc_url($item->data->url)."'>".esc_html($item->data->title)."</a>",
+								"<a class='zp-ItemURL' ".$zp_target_output."href='".$item->data->url."'>".$item->data->title."</a>",
 								$item->bib
 							);
 
 						// Finally, revert bib entities:
 						$item->bib = html_entity_decode( $item->bib, ENT_QUOTES, "UTF-8" );
 						$item->data->title = html_entity_decode( $item->data->title, ENT_QUOTES, "UTF-8" );
-						
-						} catch ( Exception $e ) {
-							// Log the error but don't fail the entire request
-							error_log("Zotpress: Error processing title URL wrap for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
-							// Fallback: just hyperlink the URL text instead
-							if ( isset($item->data->url) && strlen($item->data->url) > 0 ) {
-								$item->bib = str_ireplace(
-									htmlentities($item->data->url),
-									"<a class='zp-ItemURL' ".$zp_target_output."href='".esc_url($item->data->url)."'>".esc_html($item->data->url)."</a>",
-									$item->bib
-								);
-							}
-						}
 
 					}
 					else // Just hyperlink the URL text
@@ -921,11 +738,11 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						// Get the user's account
 						$zp_account = zotpress_get_account ($wpdb, $tempUserId);
 
-						// Use HTTP header for API key (recommended per Zotero API docs)
 						$zp_child_url = "https://api.zotero.org/".$zp_account[0]->account_type."/".$tempUserId."/items";
 						$zp_child_url .= "/".$item->key."/children?";
-						// Note: API key is now passed as HTTP header (Zotero-API-Key) in request.class.php
-						$zp_child_url .= "format=json&include=data";
+						if (!is_null($zp_account[0]->public_key) && trim($zp_account[0]->public_key) != "")
+							$zp_child_url .= "key=".$zp_account[0]->public_key."&";
+						$zp_child_url .= "&format=json&include=data";
 
 						// Get data
 						$zp_import_child = new ZotpressRequest();
@@ -1017,13 +834,6 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				} // $zpr["downloadable"]
 
 				$zp_all_the_data[] = $item;
-				
-				} catch ( Exception $e ) {
-					// Log the error but continue processing other items
-					error_log("Zotpress: Error processing item " . (isset($item->key) ? $item->key : 'unknown') . " in batch at start=" . $zpr["request_start"] . ": " . $e->getMessage());
-					// Continue to next item instead of failing entire batch
-					continue;
-				}
 
 			} // foreach item
 
@@ -1096,6 +906,7 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 
 				// Check open lib next
 				// REVIEW: Will break if Open Library is down!
+				// 7.4.3: Added fixes via André Lambelet, e.g., https, headers
 				if ( $zpr["showimage"] === "openlib" )
 				{
 					$zp_showimage_keys = explode( ",", $zp_showimage_keys );
@@ -1105,13 +916,23 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						if ( ! in_array( $data->key,  $zp_showimage_keys )
 								&& ( isset($data->data->ISBN) && $data->data->ISBN != "" ) )
 						{
-							$openlib_url = "http://covers.openlibrary.org/b/isbn/".$data->data->ISBN."-M.jpg";
+							$openlib_url = "https://covers.openlibrary.org/b/isbn/".$data->data->ISBN."-M.jpg";
 
 							// First, get the headers
 							$openlib_headers = @get_headers( $openlib_url );
 
 							// And make sure Open Library / the source is online
-							if ( $openlib_headers[0] == "HTTP/1.1 302 Found" )
+							// if ( $openlib_headers[0] == "HTTP/1.1 302 Found" )
+							$openlib_status = isset($openlib_headers[0]) ? $openlib_headers[0] : '';
+							$openlib_ctype  = '';
+							foreach ( $openlib_headers as $h ) {
+								if ( stripos( $h, 'content-type:' ) === 0 ) {
+									$openlib_ctype = strtolower( $h );
+									break;
+								}
+							}
+							if ( ( strpos($openlib_status, '200') !== false && strpos($openlib_ctype, 'image/jpeg') !== false )
+									|| strpos($openlib_status, '302') !== false )
 							{
 								$zp_all_the_data[$id]->image = array( $openlib_url );
 
@@ -1137,47 +958,16 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 			// TODO: Perhaps cache the download requests and deal with them separately
 			foreach ( $zp_all_the_data as $id => $data )
 			{
-				// Comprehensive sanitization of titles and tags before final output
-				try {
-					if ( isset($data->data->title) ) {
-						$zp_all_the_data[$id]->data->title = zotpress_sanitize_special_chars( $data->data->title, 'title' );
-					}
-					if ( isset($data->data->tags) ) {
-						$zp_all_the_data[$id]->data->tags = zotpress_sanitize_special_chars( $data->data->tags, 'tag' );
-					}
-					if ( isset($data->data->abstractNote) ) {
-						$zp_all_the_data[$id]->data->abstractNote = zotpress_sanitize_special_chars( $data->data->abstractNote, 'title' );
-					}
-				} catch ( Exception $e ) {
-					error_log("Zotpress: Error in final sanitization for item " . (isset($data->key) ? $data->key : 'unknown') . ": " . $e->getMessage());
-				}
 				// 7.4 Update: Trying to avoid errors ...
-				// Ensure consistent HTML encoding for JSON output
 				if ( isset($zp_all_the_data[$id]->bib) )
-					$zp_all_the_data[$id]->bib = htmlspecialchars($zp_all_the_data[$id]->bib, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+					$zp_all_the_data[$id]->bib = esc_html($zp_all_the_data[$id]->bib);
 
 				// 7.4: Abstract breaking when unicode exists
 				// if ( isset($zp_all_the_data[$id]->data->abstractNote) )
 				// 	$zp_all_the_data[$id]->data->abstractNote = mb_convert_encoding($zp_all_the_data[$id]->data->abstractNote, 'UTF-8', 'UCS-2BE');
 				// 7.4.1: Now appears in another language sometimes ... fix by Jeremy Varnham (@jvarn13)
-				// Process abstractNote and title with error handling for special characters
-				try {
-					if ( isset($zp_all_the_data[$id]->data->abstractNote) )
-						$zp_all_the_data[$id]->data->abstractNote = htmlspecialchars($zp_all_the_data[$id]->data->abstractNote, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-					
-					// Ensure title is properly encoded if it exists
-					if ( isset($zp_all_the_data[$id]->data->title) ) {
-						// Title should already be processed, but ensure it's safe for JSON
-						$zp_all_the_data[$id]->data->title = mb_convert_encoding($zp_all_the_data[$id]->data->title, 'UTF-8', 'UTF-8');
-					}
-				} catch ( Exception $e ) {
-					// Log the error but don't fail the entire request
-					error_log("Zotpress: Error processing abstractNote/title for item " . (isset($zp_all_the_data[$id]->key) ? $zp_all_the_data[$id]->key : 'unknown') . ": " . $e->getMessage());
-					// Ensure at least basic encoding
-					if ( isset($zp_all_the_data[$id]->data->abstractNote) ) {
-						$zp_all_the_data[$id]->data->abstractNote = @htmlspecialchars($zp_all_the_data[$id]->data->abstractNote, ENT_QUOTES, 'UTF-8') ?: '';
-					}
-				}
+				if ( isset($zp_all_the_data[$id]->data->abstractNote) )
+				    $zp_all_the_data[$id]->data->abstractNote = esc_html($zp_all_the_data[$id]->data->abstractNote);
 			}
 
 			// Re-sort with order of entry if bib and default sort
@@ -1246,92 +1036,32 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 		if ( count($zp_all_the_data) > 0
 		 		&& $zp_all_the_data != "" )
 		{
-			// Final comprehensive sanitization pass before JSON encoding
-			// This catches any special characters that might have been missed
-			try {
-				foreach ( $zp_all_the_data as $id => $item ) {
-					if ( isset($item->data) ) {
-						// Sanitize all string fields that might contain special characters
-						$string_fields = array( 'title', 'abstractNote', 'shortTitle', 'publicationTitle', 'seriesTitle', 'websiteTitle' );
-						foreach ( $string_fields as $field ) {
-							if ( isset($item->data->$field) && is_string($item->data->$field) ) {
-								$zp_all_the_data[$id]->data->$field = zotpress_sanitize_special_chars( $item->data->$field, 'title' );
-							}
-						}
-						// Sanitize tags if they exist
-						if ( isset($item->data->tags) ) {
-							$zp_all_the_data[$id]->data->tags = zotpress_sanitize_special_chars( $item->data->tags, 'tag' );
-						}
-						// Sanitize bib HTML
-						if ( isset($item->bib) && is_string($item->bib) ) {
-							$zp_all_the_data[$id]->bib = zotpress_sanitize_special_chars( $item->bib, 'title' );
-						}
-					}
-				}
-			} catch ( Exception $e ) {
-				error_log("Zotpress: Error in final sanitization pass: " . $e->getMessage());
-			}
-			
-			// Ensure proper JSON encoding with error handling for titles with quotes
-			try {
-				$zp_json_encoded = wp_json_encode(
-					array (
-						"status" => "success",
-						"updateneeded" => $zp_updateneeded,
-						"instance" => $zpr["instance_id"],
-						"meta" => $zp_request_meta,
-						"data" => $zp_all_the_data
-					),
-					JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-				);
-				
-				// Check for JSON encoding errors
-				if ( $zp_json_encoded === false ) {
-					error_log("Zotpress: JSON encoding error - json_last_error: " . json_last_error_msg());
-					// Fallback: try with comprehensive sanitization
-					$sanitized_data = array();
-					foreach ( $zp_all_the_data as $id => $item ) {
-						$sanitized_item = zotpress_sanitize_special_chars( $item, 'general' );
-						$sanitized_data[] = $sanitized_item;
-					}
-					$zp_json_encoded = wp_json_encode(
-						array (
-							"status" => "success",
-							"updateneeded" => $zp_updateneeded,
-							"instance" => $zpr["instance_id"],
-							"meta" => $zp_request_meta,
-							"data" => $sanitized_data
-						),
-						JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-					);
-					if ( $zp_json_encoded === false ) {
-						// Last resort: return error
-						throw new Exception("JSON encoding failed after comprehensive sanitization: " . json_last_error_msg());
-					}
-				}
-			} catch ( Exception $e ) {
-				// Log the error and return a safe error response
-				error_log("Zotpress: Error encoding JSON output: " . $e->getMessage());
-				if ( $is_ajax ) {
-					$error_response = wp_json_encode(
-						array(
-							"status" => "error",
-							"instance" => $zpr["instance_id"],
-							"meta" => $zp_request_meta,
-							"data" => "Error processing data. Please check server error logs."
-						)
-					);
-					echo $error_response;
-					exit();
-				} else {
-					return "<p>Zotpress Error: Unable to process data. Please check server error logs.</p>";
-				}
-			}
+			$zp_json_encoded = wp_json_encode(
+				array (
+					"status" => "success",
+					"updateneeded" => $zp_updateneeded,
+					"instance" => $zpr["instance_id"],
+					"meta" => $zp_request_meta,
+					"data" => $zp_all_the_data
+				)
+			);
 
 			if ( $is_ajax ) // JS:
 			{
-				// Output JSON directly without wp_kses interference
-				echo $zp_json_encoded;
+				// echo $zp_json_encoded;
+				echo wp_kses($zp_json_encoded,
+					array(
+						'p' => array(),
+						'i' => array(),
+						'b' => array(),
+						'em' => array(),
+						'strong' => array(),
+						'div' => array(
+							'class' => array(),
+							'style' => array()
+						),
+					)
+				);
 
 				exit(); // REVIEW: Causing to break if error
 			}
@@ -1341,11 +1071,11 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 				$zp_output = "\t\t\t\t";
 
 				if ( $zp_updateneeded )
-					$zp_output .= '<span class="ZP_UPDATENEEDED ZP_ATTR" style="display:none !important; visibility:hidden !important; position:absolute !important; left:-9999px !important; width:0 !important; height:0 !important; overflow:hidden !important; font-size:0 !important; line-height:0 !important;">true</span>';
+					$zp_output .= '<span class="ZP_UPDATENEEDED ZP_ATTR">true</span>';
+				$zp_output .= '<span class="ZP_CACHETIMER ZP_ATTR">'.get_option("Zotpress_DefaultCacheTimer").'</span>';
 
 				// $zp_output .= '<span class="ZP_USED_CACHE ZP_ATTR">true</span>';
-				// Store JSON in hidden span - use rawurlencode() because JavaScript expects URL-encoded content for decodeURIComponent()
-				$zp_output .= '<span class="ZP_JSON ZP_ATTR" style="display:none !important; visibility:hidden !important; position:absolute !important; left:-9999px !important; width:0 !important; height:0 !important; overflow:hidden !important; font-size:0 !important; line-height:0 !important;">'.rawurlencode($zp_json_encoded).'</span>';
+				$zp_output .= '<span class="ZP_JSON ZP_ATTR">'.rawurlencode($zp_json_encoded).'</span>';
 				$zp_output .= "\n\n";
 
 				foreach ( $zp_all_the_data as $zp_citation )
@@ -1412,31 +1142,24 @@ function Zotpress_shortcode_request( $zpr=false, $checkcache=false )
 						)
 					);
 
-			// Output JSON directly without wp_kses interference
-			echo $zp_output;
+			// echo $zp_output;
+			echo wp_kses($zp_output,
+				array(
+					'p' => array(),
+					'i' => array(),
+					'b' => array(),
+					'em' => array(),
+					'strong' => array(),
+					'div' => array(
+						'id' => array(),
+						'class' => array(),
+						'style' => array()
+					),
+				)
+			);
 
 			if ( $is_ajax )
 				exit(); // REVIEW: Causing to break if error
-		}
-	}
-	} catch ( Exception $e ) {
-		// Log the error for debugging
-		error_log( 'Zotpress Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine() );
-		
-		// Return a proper error response
-		if ( $is_ajax ) {
-			$error_response = wp_json_encode(
-				array(
-					"status" => "error",
-					"instance" => isset($zpr["instance_id"]) ? $zpr["instance_id"] : false,
-					"meta" => array( "request_last" => 0, "request_next" => 0 ),
-					"data" => "An error occurred while processing your request. Please check the server error logs."
-				)
-			);
-			echo $error_response;
-			exit();
-		} else {
-			return "<p>Zotpress Error: An error occurred while processing your request.</p>";
 		}
 	}
 }

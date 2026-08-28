@@ -6,7 +6,7 @@
  *  ZOTPRESS REQUEST CLASS
  *
  *  Based on Sean Huber's CURL library with additions by Mike Purvis.
- *  Checks for updates every 10 minutes.
+ *  Checks for updates every 10 minutes or based on cache timer setting.
  *
  *  Requires: request url (e.g. https://api.zotero.org/...), api user id (can be accessed from request url)
  *  Returns: array with json and headers (json-formatted)
@@ -19,12 +19,9 @@ if ( ! class_exists('ZotpressRequest') )
     {
         public  $update = false,
                 $request_error = false,
-                $check_every_n_mins = 10, // 10 minutes
+                $check_every_n_mins = 10, // 10 minutes by default
                 $api_user_id,
-                $api_key = false,
-                $cleaned_url = false,
-                $request_type = 'item',
-                $account_type = false; // 'users' or 'groups'
+                $request_type = 'item';
 
         // REVIEW: This was causing problems for some people ...
         // Could it be how the database is set up?
@@ -47,61 +44,13 @@ if ( ! class_exists('ZotpressRequest') )
             if ( $request_type != 'item' )
                 $this->request_type = $request_type;
 
-            // Extract API key from URL if present (for backward compatibility)
-            // Then remove it from URL as we'll use it as a header
-            $parsed_url = parse_url($url);
-            if ( isset($parsed_url['query']) ) {
-                parse_str($parsed_url['query'], $query_params);
-                if ( isset($query_params['key']) ) {
-                    $this->api_key = $query_params['key'];
-                    // Remove key from query string
-                    unset($query_params['key']);
-                    // Rebuild URL without key
-                    $new_query = http_build_query($query_params);
-                    $url = $parsed_url['scheme'] . '://' . $parsed_url['host'] . $parsed_url['path'];
-                    if ( !empty($new_query) ) {
-                        $url .= '?' . $new_query;
-                    } elseif ( isset($parsed_url['fragment']) ) {
-                        $url .= '#' . $parsed_url['fragment'];
-                    }
-                }
-            }
-
-            // Get and set api user id and account type
-            // Check for groups first, then users
+            // Get and set api user id
             $divider = "users/";
-            if ( strpos( $url, "groups/" ) !== false ) {
+            if ( strpos( $url, "groups" ) !== false )
                 $divider = "groups/";
-                $this->account_type = "groups";
-                error_log("Zotpress: Detected group account from URL: " . $url);
-            } elseif ( strpos( $url, "users/" ) !== false ) {
-                $this->account_type = "users";
-            } else {
-                // If neither found, log error and default to users
-                error_log("Zotpress: Could not determine account type from URL: " . $url);
-                $this->account_type = "users";
-            }
-            error_log("Zotpress: set_request_meta - account_type set to: " . $this->account_type . " for URL: " . $url);
             $temp1 = explode( $divider, $url );
-            if ( isset($temp1[1]) ) {
-                $temp2 = explode( "/", $temp1[1] );
-                $this->api_user_id = $temp2[0];
-            } else {
-                error_log("Zotpress: Could not extract API user ID from URL: " . $url);
-                $this->api_user_id = false;
-            }
-
-            // If we don't have an API key from URL, try to get it from database
-            if ( ! $this->api_key && $this->api_user_id ) {
-                global $wpdb;
-                $zp_account = zotpress_get_account( $wpdb, $this->api_user_id );
-                if ( count($zp_account) > 0 && ! empty($zp_account[0]->public_key) ) {
-                    $this->api_key = $zp_account[0]->public_key;
-                }
-            }
-
-            // Store cleaned URL (without key) for use in requests
-            $this->cleaned_url = $url;
+            $temp2 = explode( "/", $temp1[1] );
+            $this->api_user_id = $temp2[0];
         }
 
 
@@ -110,9 +59,7 @@ if ( ! class_exists('ZotpressRequest') )
         {
             $this->set_request_meta( $url, $update, $request_type );
 
-            // Use cleaned URL for cache lookup
-            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
-            $data = $this->check_and_get_cache( $cache_url );
+            $data = $this->check_and_get_cache( $url );
 
             // Check for request errors
             if ( $this->request_error !== false )
@@ -129,9 +76,7 @@ if ( ! class_exists('ZotpressRequest') )
 
             $this->set_request_meta( $url, $update, $request_type );
 
-            // Use cleaned URL for request
-            $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
-            $data = $this->getRegular( $wpdb, $request_url );
+            $data = $this->getRegular( $wpdb, $url, true );
             $data["json"] = $data["data"];
 
             // Check for request errors
@@ -147,14 +92,7 @@ if ( ! class_exists('ZotpressRequest') )
             $this->set_request_meta( $url, $update, $request_type );
 
             // NEW in 7.3.6: First, check the cache:
-            // Use cleaned URL for cache lookup
-            // Initialize variables to prevent undefined variable warnings
-            $json = false;
-            $tags = false;
-            $headers = false;
-            
-            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
-            $data = $this->check_and_get_cache( $cache_url );
+            $data = $this->check_and_get_cache( $url );
             $data_json = json_decode($data["json"]);
 
             // Only try to update if time has passed:
@@ -166,9 +104,7 @@ if ( ! class_exists('ZotpressRequest') )
             // if ( property_exists($data_json, "status")
             //         && $data_json->status == "No Cache" )
             {
-                // Use cleaned URL for request
-                $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
-                $data = $this->get_xml_data( $request_url, $data["updateneeded"] );
+                $data = $this->get_xml_data( $url, $data["updateneeded"] );
             }
 
             // Check for request errors
@@ -199,6 +135,12 @@ if ( ! class_exists('ZotpressRequest') )
                 + ( $timeElapsed->i )
                 + ( $timeElapsed->s * 0.0166667 );
 
+            // 7.4.4: Added cache timer
+            if ( get_option("Zotpress_DefaultCacheTimer")
+                    && is_int( get_option("Zotpress_DefaultCacheTimer") )
+                    && get_option("Zotpress_DefaultCacheTimer") >= 10 )
+                $this->check_every_n_mins = get_option("Zotpress_DefaultCacheTimer");
+
             if ( $timeElapsedMin > $this->check_every_n_mins )
                 return true;
             else // Not time yet
@@ -210,18 +152,7 @@ if ( ! class_exists('ZotpressRequest') )
         {
             global $wpdb;
 
-            // Use cleaned URL for cache lookups (consistent key regardless of key location)
-            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
-
             // First, check db to see if cached version exists
-            // $zp_query =
-            //         "
-            //         SELECT DISTINCT ".$wpdb->prefix."zotpress_cache.*
-            //         FROM ".$wpdb->prefix."zotpress_cache
-            //         WHERE ".$wpdb->prefix."zotpress_cache.request_id = '".md5( $url )."'
-            //         AND ".$wpdb->prefix."zotpress_cache.api_user_id = '".$this->api_user_id."'
-            //         ";
-            // $zp_results = $wpdb->get_results( $zp_query, OBJECT );
             $zp_results = $wpdb->get_results(
                 $wpdb->prepare(
                     "
@@ -230,7 +161,7 @@ if ( ! class_exists('ZotpressRequest') )
                     WHERE ".$wpdb->prefix."zotpress_cache.request_id = %s
                     AND ".$wpdb->prefix."zotpress_cache.api_user_id = %s
                     ",
-                    array( md5($cache_url), $this->api_user_id )
+                    array( md5($url), $this->api_user_id )
                 ), OBJECT
             );
             // unset($zp_query);
@@ -271,28 +202,11 @@ if ( ! class_exists('ZotpressRequest') )
         function get_xml_data( $url, $updateneeded=false )
         {
             global $wpdb;
-            
-            // Initialize variables to prevent undefined variable warnings
-            $json = false;
-            $tags = false;
-            $headers = false;
-
-            // Use cleaned URL for cache lookups
-            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
 
             // Just want to check for cached version
             if ( $this->update === false )
             {
                 // First, check db to see if cached version exists
-                // $zp_query =
-                //         "
-                //         SELECT DISTINCT ".$wpdb->prefix."zotpress_cache.*
-                //         FROM ".$wpdb->prefix."zotpress_cache
-                //         WHERE ".$wpdb->prefix."zotpress_cache.request_id = '".md5( $cache_url )."'
-                //         AND ".$wpdb->prefix."zotpress_cache.api_user_id = '".$this->api_user_id."'
-                //         ";
-                // $zp_results = $wpdb->get_results( $zp_query, OBJECT ); unset($zp_query);
-
                 $zp_results = $wpdb->get_results(
                     $wpdb->prepare(
                         "
@@ -301,7 +215,7 @@ if ( ! class_exists('ZotpressRequest') )
                         WHERE ".$wpdb->prefix."zotpress_cache.request_id = %s
                         AND ".$wpdb->prefix."zotpress_cache.api_user_id = %s
                         ",
-                        array( md5($cache_url), $this->api_user_id )
+                        array( md5($url), $this->api_user_id )
                     ), OBJECT
                 );
                 
@@ -315,9 +229,7 @@ if ( ! class_exists('ZotpressRequest') )
 
                 else // No cached
                 {
-                    // Use cleaned URL for request
-                    $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
-                    $regular = $this->getRegular( $wpdb, $request_url );
+                    $regular = $this->getRegular( $wpdb, $url );
 
                     $json = $regular['data'];
                     $tags = $regular['tags'];
@@ -329,9 +241,7 @@ if ( ! class_exists('ZotpressRequest') )
 
             else // Normal or RIS
             {
-                // Use cleaned URL for request
-                $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
-                $regular = $this->getRegular( $wpdb, $request_url );
+                $regular = $this->getRegular( $wpdb, $url );
 
                 $json = $regular['data'];
                 $tags = $regular['tags'];
@@ -346,19 +256,7 @@ if ( ! class_exists('ZotpressRequest') )
         {
             global $wpdb;
 
-            // Use cleaned URL for cache lookups (consistent key regardless of key location)
-            $cache_url = $this->cleaned_url ? $this->cleaned_url : $url;
-
             // First, check db to see if cached version exists
-            // $zp_query =
-            //         "
-            //         SELECT DISTINCT ".$wpdb->prefix."zotpress_cache.*
-            //         FROM ".$wpdb->prefix."zotpress_cache
-            //         WHERE ".$wpdb->prefix."zotpress_cache.request_id = '".md5( $url )."'
-            //         AND ".$wpdb->prefix."zotpress_cache.api_user_id = '".$this->api_user_id."'
-            //         ";
-            // $zp_results = $wpdb->get_results($zp_query, OBJECT); unset($zp_query);
-
             $zp_results = $wpdb->get_results(
                 $wpdb->prepare(
                     "
@@ -367,7 +265,7 @@ if ( ! class_exists('ZotpressRequest') )
                     WHERE ".$wpdb->prefix."zotpress_cache.request_id = %s
                     AND ".$wpdb->prefix."zotpress_cache.api_user_id = %s
                     ",
-                    array( md5($cache_url), $this->api_user_id )
+                    array( md5($url), $this->api_user_id )
                 ), OBJECT
             );
 
@@ -382,117 +280,23 @@ if ( ! class_exists('ZotpressRequest') )
                     || ( isset($zp_results[0]->retrieved)
                             && $this->check_time($zp_results[0]->retrieved) ) )
             {
-                // Check if this is a group account - use stored account_type for reliable detection
-                $is_group = ( $this->account_type === "groups" );
-                
                 $headers_arr = array ( "Zotero-API-Version" => "3" );
-
-                // Add API key as header (recommended method per Zotero API docs)
-                // For groups, only add key if we have one - public groups work without keys
-                if ( $this->api_key ) {
-                    $headers_arr["Zotero-API-Key"] = $this->api_key;
-                } else if ( $is_group ) {
-                    // For groups without API key, try without key (public groups don't need auth)
-                    error_log("Zotpress: Group request without API key - attempting public group access");
-                }
 
                 if ( count($zp_results) > 0 )
                     $headers_arr["If-Modified-Since-Version"] = $zp_results[0]->libver;
 
-                // Use cleaned URL (without key in query string)
-                $request_url = $this->cleaned_url ? $this->cleaned_url : $url;
-
                 // Get response
-                $response = wp_remote_get( $request_url, array ( 'headers' => $headers_arr ) );
+                $response = wp_remote_get( $url, array ( 'headers' => $headers_arr ) );
 
                 if ( is_wp_error($response) )
                     $this->request_error = $response->get_error_message();
-                // Check for HTTP error codes that might indicate permission issues
-                else if ( isset($response["response"]["code"]) ) {
-                    $http_code = $response["response"]["code"];
-                    if ( $http_code == 403 ) {
-                        // Check if this is a group account - use stored account_type for reliable detection
-                        // Also check URL as fallback in case account_type wasn't set
-                        $is_group = ( $this->account_type === "groups" ) || ( strpos( $request_url, "groups/" ) !== false ) || ( strpos( $url, "groups/" ) !== false );
-                        error_log("Zotpress: 403 error - account_type: " . ($this->account_type ? $this->account_type : "NOT SET") . ", request_url: " . $request_url . ", original url: " . $url . ", Is Group: " . ($is_group ? "Yes" : "No") . ", Has API Key: " . ($this->api_key ? "Yes" : "No"));
-                        if ( $is_group && $this->api_key ) {
-                            // For groups, if we get 403 with an API key, try without the key
-                            // Public groups don't require authentication per Zotero API docs
-                            error_log("Zotpress: Got 403 for group with API key, retrying without key (public group may not require auth)");
-                            $headers_arr_no_key = array ( "Zotero-API-Version" => "3" );
-                            if ( count($zp_results) > 0 )
-                                $headers_arr_no_key["If-Modified-Since-Version"] = $zp_results[0]->libver;
-                            
-                            $retry_response = wp_remote_get( $request_url, array ( 'headers' => $headers_arr_no_key ) );
-                            
-                            // Check if retry was successful
-                            if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) && $retry_response["response"]["code"] == 200 ) {
-                                // Success! Public group doesn't need API key - use the retry response
-                                $this->api_key = false; // Clear key for this request
-                                $this->request_error = false;
-                                $response = $retry_response; // Use the successful retry response
-                                $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                                error_log("Zotpress: Retry successful for public group - proceeding with response");
-                                // Continue processing below - don't set error, let it fall through to normal processing
-                            } else {
-                                // Still failed, provide error message
-                                if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) ) {
-                                    $retry_code = $retry_response["response"]["code"];
-                                    if ( $retry_code == 403 ) {
-                                        $this->request_error = "Access forbidden. This group is private and requires an API key with 'Read' or 'Read/Write' permissions. Check your Zotero Settings > Keys and the group's permissions.";
-                                    } else {
-                                        $this->request_error = "HTTP Error {$retry_code}: " . ( isset($retry_response["body"]) ? $retry_response["body"] : "Unknown error" );
-                                    }
-                                } else {
-                                    $this->request_error = "Access forbidden. For group libraries, ensure your API key has 'Read' or 'Read/Write' permissions for this group, or the group is public. Check your Zotero Settings > Keys and the group's permissions.";
-                                }
-                            }
-                        } else if ( $is_group ) {
-                            // Group but no API key (or invalid key) - try without key first (public groups don't need auth)
-                            error_log("Zotpress: 403 for group without valid API key, retrying without key (public group may not require auth)");
-                            $headers_arr_no_key = array ( "Zotero-API-Version" => "3" );
-                            if ( count($zp_results) > 0 )
-                                $headers_arr_no_key["If-Modified-Since-Version"] = $zp_results[0]->libver;
-                            
-                            $retry_response = wp_remote_get( $request_url, array ( 'headers' => $headers_arr_no_key ) );
-                            
-                            // Check if retry was successful
-                            if ( ! is_wp_error($retry_response) && isset($retry_response["response"]["code"]) && $retry_response["response"]["code"] == 200 ) {
-                                // Success! Public group doesn't need API key - use the retry response
-                                $this->request_error = false;
-                                $response = $retry_response; // Use the successful retry response
-                                $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                                error_log("Zotpress: Retry successful for public group (no API key) - proceeding with response");
-                                // Continue processing below - don't set error, let it fall through to normal processing
-                            } else {
-                                // Still failed, group is private
-                                $this->request_error = "Access forbidden. This group is private and requires an API key with 'Read' or 'Read/Write' permissions. Check your Zotero Settings > Keys and the group's permissions.";
-                            }
-                        } else {
-                            $this->request_error = "Access forbidden. Check that your API key has proper permissions.";
-                        }
-                    } else if ( $http_code == 404 ) {
-                        $this->request_error = "Resource not found. Verify the group/user ID and that the resource exists.";
-                    } else if ( $http_code >= 400 ) {
-                        $this->request_error = "HTTP Error {$http_code}: " . ( isset($response["body"]) ? $response["body"] : "Unknown error" );
-                    } else {
-                        // 7.3.13: No collection and tag error reporting:
-                        if ( isset($response["body"]) && ( $response["body"] == "Collection not found" || $response["body"] == "Tag not found" ) ) {
-                            $this->request_error = $response["body"];
-                        } else {
-                            // $headers = json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                            $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                        }
-                    }
-                } else {
-                    // 7.3.13: No collection and tag error reporting:
-                    if ( isset($response["body"]) && ( $response["body"] == "Collection not found" || $response["body"] == "Tag not found" ) ) {
-                        $this->request_error = $response["body"];
-                    } else {
-                        // $headers = json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                        $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
-                    }
-                }
+                // 7.3.13: No collection and tag error reporting:
+                else if ( $response["body"] == "Collection not found"
+                        || $response["body"] == "Tag not found" )
+                    $this->request_error = $response["body"];
+                else
+                    // $headers = json_encode( wp_remote_retrieve_headers( $response )->getAll() );
+                    $headers = wp_json_encode( wp_remote_retrieve_headers( $response )->getAll() );
             }
 
             if ( ! $this->request_error )
@@ -512,11 +316,7 @@ if ( ! class_exists('ZotpressRequest') )
                         {
                             // Try again with less restrictions
                             add_filter('https_ssl_verify', '__return_false');
-                            $fallback_headers = array("Zotero-API-Version" => "2");
-                            if ( $this->api_key ) {
-                                $fallback_headers["Zotero-API-Key"] = $this->api_key;
-                            }
-                            $response = wp_remote_get( $request_url, array( 'headers' => $fallback_headers ) );
+                            $response = wp_remote_get( $url, array( 'headers' => array("Zotero-API-Version" => "2") ) );
 
                             if (is_wp_error($response) || ! isset($response['body'])) {
                                 $this->request_error = $response->get_error_message();
@@ -564,26 +364,6 @@ if ( ! class_exists('ZotpressRequest') )
                             // REVIEW: Does this account for all unused metadata? Depends on item type ...
                             foreach( $data as $id => $item )
                             {
-                                // Sanitize title and other text fields with special characters BEFORE processing
-                                try {
-                                    if ( property_exists($data[$id], 'data') ) {
-                                        // Sanitize title if it exists
-                                        if ( property_exists($data[$id]->data, 'title') && is_string($data[$id]->data->title) ) {
-                                            $data[$id]->data->title = zotpress_sanitize_special_chars( $data[$id]->data->title, 'title' );
-                                        }
-                                        // Sanitize other text fields that might have special characters
-                                        $text_fields = array( 'abstractNote', 'shortTitle', 'publicationTitle', 'seriesTitle', 'websiteTitle' );
-                                        foreach ( $text_fields as $field ) {
-                                            if ( property_exists($data[$id]->data, $field) && is_string($data[$id]->data->$field) ) {
-                                                $data[$id]->data->$field = zotpress_sanitize_special_chars( $data[$id]->data->$field, 'title' );
-                                            }
-                                        }
-                                    }
-                                } catch ( Exception $e ) {
-                                    // Log but continue processing
-                                    error_log("Zotpress: Error sanitizing title/text fields for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
-                                }
-                                
                                 if ( property_exists($data[$id], 'version') ) unset($data[$id]->version);
                                 if ( property_exists($data[$id], 'links') ) unset($data[$id]->links);
 
@@ -635,76 +415,20 @@ if ( ! class_exists('ZotpressRequest') )
                                 
                                 // 7.4 Update: Might not exist
                                 if ( isset($item->key) )
-                                {
                                     $tags[$item->key] = "";
 
-                                    // Handle tags with special characters (e.g., ® symbol, brackets, quotes)
-                                    // Wrap in try-catch to prevent 500 errors from encoding issues
-                                    try {
-                                        if ( property_exists($data[$id], 'data')
-                                                && property_exists($data[$id]->data, 'tags') )
-                                        {
-                                            // Use comprehensive sanitization function
-                                            $tag_data = zotpress_sanitize_special_chars( $data[$id]->data->tags, 'tag' );
-                                            
-                                            // Ensure tags are properly encoded as UTF-8
-                                            if ( is_array($tag_data) ) {
-                                                // Process each tag to ensure UTF-8 encoding
-                                                $processed_tags = array();
-                                                foreach ( $tag_data as $tag_obj ) {
-                                                    if ( is_object($tag_obj) && property_exists($tag_obj, 'tag') ) {
-                                                        // Sanitize the tag string comprehensively
-                                                        $tag_str = zotpress_sanitize_special_chars( $tag_obj->tag, 'tag' );
-                                                        // Ensure valid UTF-8
-                                                        if ( ! mb_check_encoding( $tag_str, 'UTF-8' ) ) {
-                                                            $tag_str = mb_convert_encoding( $tag_str, 'UTF-8', 'UTF-8' );
-                                                        }
-                                                        // Remove any remaining problematic characters
-                                                        $tag_str = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $tag_str );
-                                                        $processed_tags[] = (object) array('tag' => $tag_str);
-                                                    } else {
-                                                        $processed_tags[] = zotpress_sanitize_special_chars( $tag_obj, 'tag' );
-                                                    }
-                                                }
-                                                $tags[$item->key] = $processed_tags;
-                                            } else {
-                                                $tags[$item->key] = $tag_data;
-                                            }
-                                            unset($data[$id]->data->tags);
-                                        }
-                                    } catch ( Exception $e ) {
-                                        // Log the error but don't fail the entire request
-                                        error_log("Zotpress: Error processing tags for item " . (isset($item->key) ? $item->key : 'unknown') . ": " . $e->getMessage());
-                                        // Set empty tags array to prevent further errors
-                                        $tags[$item->key] = array();
-                                    }
+                                if ( property_exists($data[$id], 'data')
+                                        && property_exists($data[$id]->data, 'tags') )
+                                {
+                                    $tags[$item->key] = $data[$id]->data->tags;
+                                    unset($data[$id]->data->tags);
                                 }
                             }
 
-                            // Ensure UTF-8 encoding for JSON encoding
-                            // wp_json_encode should handle UTF-8, but we'll ensure it explicitly
-                            $json = wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                            $tags_json = wp_json_encode($tags, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                            
-                            // Check for JSON encoding errors
-                            if ( $json === false || $tags_json === false ) {
-                                error_log("Zotpress: JSON encoding error - json_last_error: " . json_last_error_msg());
-                                // Fallback: try with error suppression and basic encoding
-                                $json = @wp_json_encode($data) ?: '[]';
-                                $tags_json = @wp_json_encode($tags) ?: '{}';
-                            }
-                            
-                            // Compress with UTF-8 preservation
-                            // gzencode should preserve UTF-8, but ensure it explicitly
-                            $json_compressed = @gzencode($json, 9);
-                            $tags_compressed = @gzencode($tags_json, 9);
-                            
-                            // Check if compression succeeded
-                            if ( $json_compressed === false || $tags_compressed === false ) {
-                                error_log("Zotpress: gzencode error - falling back to uncompressed");
-                                $json_compressed = $json;
-                                $tags_compressed = $tags_json;
-                            }
+                            $json = wp_json_encode($data);
+                            $tags = wp_json_encode($tags);
+                            // $json = json_encode($data);
+                            // $tags = json_encode($tags);
 
                             $wpdb->query(
                                 $wpdb->prepare(
@@ -721,10 +445,10 @@ if ( ! class_exists('ZotpressRequest') )
                                 ",
                                 array
                                 (
-                                    md5( $cache_url ),
+                                    md5( $url ),
                                     $this->api_user_id,
-                                    $json_compressed,
-                                    $tags_compressed, // 7.1.4: separated from $data
+                                    gzencode($json),
+                                    gzencode($tags), // 7.1.4: separated from $data
                                     $headers,
                                     $response["headers"]["last-modified-version"],
                                     gmdate('m/d/Y h:i:s a')
@@ -766,7 +490,7 @@ if ( ! class_exists('ZotpressRequest') )
                         ",
                         array
                         (
-                            md5( $cache_url ),
+                            md5( $url ),
                             $this->api_user_id,
                             gmdate('m/d/Y h:i:s a')
                         ))

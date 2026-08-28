@@ -17,7 +17,6 @@ require(__DIR__ . '/../request/request.cite.php');
  */
 function Zotpress_func( $atts ) {
 
-    // extract( shortcode_atts( array(
     $zp_atts = shortcode_atts( array(
 
         'user_id' => false, // deprecated
@@ -52,8 +51,6 @@ function Zotpress_func( $atts ) {
 
         'style' => false,
         'limit' => false,
-        'loadmore' => 'no', // 7.4.3: Enable "Load More" pagination for large libraries
-        'initial' => 50, // 7.4.3: Number of items to show initially when loadmore is enabled
 
         'sortby' => 'default',
         'order' => false,
@@ -91,76 +88,6 @@ function Zotpress_func( $atts ) {
 
     ), $atts );
 
-    // array_push($_GET, shortcode_atts(array(
-
-    //     'user_id' => false, // deprecated
-    //     'userid' => false,
-    //     'nickname' => false,
-    //     'nick' => false,
-
-    //     'author' => false,
-    //     'authors' => false,
-    //     'year' => false,
-    //     'years' => false,
-
-    //     'itemtype' => false, // for selecting by itemtype; assumes one type
-    //     'item_type' => 'items',
-    //     'data_type' => false, // deprecated
-    //     'datatype' => 'items',
-
-    //     'collection_id' => false,
-    //     'collection' => false,
-    //     'collections' => false,
-
-    //     'item_key' => false,
-    //     'item' => false,
-    //     'items' => false,
-
-    //     'inclusive' => 'yes',
-
-    //     'tag_name' => false,
-    //     'tag' => false,
-    //     'tags' => false,
-
-    //     'style' => false,
-    //     'limit' => false,
-
-    //     'sortby' => 'default',
-    //     'order' => false,
-    //     'sort' => false,
-
-    //     'title' => 'no',
-
-    //     'image' => false,
-    //     'images' => false,
-    //     'showimage' => 'no',
-
-    //     'showtags' => 'no',
-
-    //     'downloadable' => 'no',
-    //     'download' => 'no',
-
-    //     'shownotes' => false,
-    //     'note' => false,
-    //     'notes' => 'no',
-
-    //     'abstract' => false,
-    //     'abstracts' => 'no',
-
-    //     'cite' => 'no',
-    //     'citeable' => false,
-
-    //     'metadata' => false, // CHECK: Unused?
-
-    //     'target' => false,
-	// 	'urlwrap' => false,
-
-	// 	'highlight' => false,
-	// 	'forcenumber' => false,
-	// 	'forcenumbers' => false
-
-    // ), $atts));
-
 
     global $post, $wpdb;
 
@@ -171,210 +98,6 @@ function Zotpress_func( $atts ) {
 
     // 3.9.10: Use the Zotpress_prep_ajax_request_vars() function on bib, lib
     $zpr = Zotpress_prep_ajax_request_vars($wpdb, $zp_atts);
-
-    // Filter by account
-    // if ($user_id) {
-    //     $api_user_id = zotpress_clean_param( $user_id );
-    // } elseif ($userid) {
-    //     $api_user_id = zotpress_clean_param( $userid );
-    // } else $api_user_id = false;
-
-    // if ($nickname) $nickname = zotpress_clean_param( $nickname );
-    // if ($nick) $nickname = zotpress_clean_param( $nick );
-
-    // Filter by author
-    // $author = zotpress_clean_param( $author );
-    // if ($authors) $author = zotpress_clean_param( $authors );
-
-    // // Filter by year
-    // if ($year) {
-    //     $year = zotpress_clean_param( $year );
-    // } elseif ($years) {
-    //     $year = zotpress_clean_param( $years );
-    // } elseif (strpos($year, ",") > 0) {
-    //     $year = explode(",", $year);
-    // } else $year = "";
-
-    // // Filter by itemtype
-    // // TODO: Allow for multiple itemtypes in one shortcode?
-    // $itemtype = zotpress_clean_param( $itemtype );
-    // if ( $itemtype !== false )
-    // {
-    //     // Make sure it's one of the accepted types
-    //     $officialItemTypes = array(
-    //         'book',
-    //         'bookSection',
-    //         'journalArticle',
-    //         'conferencePaper',
-    //         'thesis',
-    //         'report',
-    //         'encyclopediaArticle',
-    //         'newspaperArticle',
-    //         'magazineArticle',
-    //         'presentation',
-    //         'interview',
-    //         'dictionaryEntry',
-    //         'document',
-    //         'manuscript',
-    //         'patent',
-    //         'map',
-    //         'blogPost',
-    //         'webpage',
-    //         'artwork',
-    //         'film',
-    //         'audioRecording',
-    //         'statute',
-    //         'bill',
-    //         'case',
-    //         'hearing',
-    //         'forumPost',
-    //         'letter',
-    //         'email',
-    //         'instantMessage',
-    //         'software',
-    //         'podcast',
-    //         'radioBroadcast',
-    //         'tvBroadcast',
-    //         'videoRecording',
-    //         'attachment',
-    //         'note',
-    //         'preprint'
-    //     );
-
-    //     $itemtypeCheck = false;
-
-    //     foreach ($officialItemTypes as $type)
-    //         if ( $itemtype == $type ) $itemtypeCheck = true;
-
-    //     if ( !$itemtypeCheck )
-    //         $itemtype = false; // Default is no itemtype filter
-    // }
-
-    // // Format with datatype and content
-    // if ($item_type) {
-    //     $item_type = zotpress_clean_param( $item_type );
-    // } elseif ($data_type) {
-    //     $item_type = zotpress_clean_param( $data_type );
-    // } else $item_type = zotpress_clean_param( $datatype );
-
-    // // Filter by collection
-    // $collection_id = false;
-    // if ($collection_id) {
-    //     $collection_id = zotpress_clean_param( $collection_id );
-    // } elseif ($collection) {
-    //     $collection_id = zotpress_clean_param( $collection );
-    // } elseif ($collections) {
-    //     $collection_id = zotpress_clean_param( $collections );
-    // }
-	// $collection_id = str_replace(" ", "", $collection_id );
-
-    // if (strpos($collection_id, ",") > 0) $collection_id = explode(",", $collection_id);
-    // if ($item_type == "collections" && isset($_GET['zpcollection']) ) $collection_id = htmlentities( urldecode( $_GET['zpcollection'] ) );
-
-    // // Filter by tag
-    // $tag_id = false;
-    // if ($tag_name) {
-    //     $tag_id = zotpress_clean_param( $tag_name );
-    // } elseif ($tags) {
-    //     $tag_id = zotpress_clean_param( $tags );
-    // } else $tag_id = zotpress_clean_param( $tag );
-
-    // $tag_id = str_replace("+", "", $tag_id);
-    // if (strpos($tag_id, ",") > 0) $tag_id = explode(",", $tag_id);
-    // if ($item_type == "tags" && isset($_GET['zptag']) ) $tag_id = htmlentities( urldecode( $_GET['zptag'] ) );
-
-    // // Filter by itemkey
-    // if ($item_key) $item_key = zotpress_clean_param( $item_key );
-    // if ($items) $item_key = zotpress_clean_param( $items );
-    // if ($item) $item_key = zotpress_clean_param( $item );
-    // if (strpos($item_key, ", ") > 0) $item_key = str_replace(', ',',',html_entity_decode($item_key)); // remove spces after commas
-    // // if (strpos($item_key, ",") > 0) $item_key = explode(",", $item_key); // ? break at commas?
-	// $item_key = str_replace(" ", "", $item_key ); // remove any spaces
-
-	// Inclusive (for multiple authors)
-    // $inclusive = $inclusive == "yes" || $inclusive == "true" || $inclusive === true;
-
-    // Format style
-    // $style = zotpress_clean_param( $style );
-
-    // Limit
-    // $limit = (int) zotpress_clean_param( $limit );
-
-    // // Order / sort
-    // $sortby = zotpress_clean_param( $sortby );
-
-    // if ($order) {
-    //     $order = strtolower(zotpress_clean_param( $order ));
-    // } elseif ($sort) {
-    //     $order = strtolower(zotpress_clean_param( $sort ));
-    // }
-    // if ($order === false) $order = "asc";
-
-    // // Show title
-	// // Sorting by secondary sort
-    // $title = zotpress_clean_param( $title );
-    // if ($title == "yes" || $title == "true" || $title === true) {
-    //     $title = "year";
-    // } elseif ($title == "no" || $title == "false") {
-    //     $title = false;
-    // }
-
-    // // Show image
-    // if ($showimage) $showimage = zotpress_clean_param( $showimage );
-    // if ($image) $showimage = zotpress_clean_param( $image );
-    // if ($images) $showimage = zotpress_clean_param( $images );
-
-    // if ($showimage == "yes" || $showimage == "true" || $showimage === true) {
-    //     $showimage = true;
-    // } elseif ($showimage === "openlib") {
-    //     $showimage = "openlib";
-    // } else $showimage = false;
-
-    // // Show tags
-    // $showtags = $showtags == "yes" || $showtags == "true" || $showtags === true;
-
-    // // Show download link
-    // if ($download == "yes" || $download == "true" || $download === true
-    //         || $downloadable == "yes" || $downloadable == "true" || $downloadable === true)
-    //     $downloadable = true; else $downloadable = false;
-
-    // // Show notes
-    // if ($shownotes) {
-    //     $shownotes = zotpress_clean_param( $shownotes );
-    // } elseif ($notes) {
-    //     $shownotes = zotpress_clean_param( $notes );
-    // } elseif ($note) {
-    //     $shownotes = zotpress_clean_param( $note );
-    // }
-
-    // $shownotes = $notes == "yes" || $notes == "true" || $notes === true;
-
-    // // Show abstracts
-    // if ($abstracts) $abstracts = zotpress_clean_param( $abstracts );
-    // if ($abstract) $abstracts = zotpress_clean_param( $abstract );
-
-    // $abstracts = $abstracts == "yes" || $abstracts == "true" || $abstracts === true;
-
-    // // Show cite link
-    // if ($cite) $citeable = zotpress_clean_param( $cite );
-    // if ($citeable) $citeable = zotpress_clean_param( $citeable );
-
-    // $citeable = $citeable == "yes" || $citeable == "true" || $citeable === true;
-
-    // CHECK: Unused?
-    // if ( ! preg_match("/^[0-9a-zA-Z]+$/", $metadata) ) $metadata = false;
-
-	// // URL attributes
-    // if ($target == "yes" || $target == "_blank" || $target == "new" || $target == "true" || $target === true)
-    // $target = true; else $target = false;
-
-    // $urlwrap = $urlwrap == "title" || $urlwrap == "image" ? zotpress_clean_param( $urlwrap ) : false;
-
-    // $highlight = $highlight ? zotpress_clean_param( $highlight ) : false;
-
-    // if ( $forcenumber == "yes" || $forcenumber == "true" || $forcenumber === true
-    //         || $forcenumbers == "yes" || $forcenumbers == "true" || $forcenumbers === true )
-    //     $forcenumber = true; else $forcenumber = false;
 
 
     // +-------------+
@@ -502,33 +225,31 @@ function Zotpress_func( $atts ) {
     // <span class="ZP_ITEM_TYPE ZP_ATTR">'.$item_type.'</span>
 	$zp_output .= '">
 
-		<span class="ZP_API_USER_ID ZP_ATTR" style="display:none;">'.$zpr["api_user_id"].'</span>
-		<span class="ZP_ITEM_KEY ZP_ATTR" style="display:none;">'.$zpr['item_key'].'</span>
-		<span class="ZP_COLLECTION_ID ZP_ATTR" style="display:none;">'.$zpr['collection_id'].'</span>
-		<span class="ZP_TAG_ID ZP_ATTR" style="display:none;">'.$zpr['tag_id'].'</span>
-		<span class="ZP_AUTHOR ZP_ATTR" style="display:none;">'.$zpr['author'].'</span>
-		<span class="ZP_YEAR ZP_ATTR" style="display:none;">'.$zpr['year'].'</span>
-        <span class="ZP_ITEMTYPE ZP_ATTR" style="display:none;">'.$zpr['itemtype'].'</span>
-		<span class="ZP_INCLUSIVE ZP_ATTR" style="display:none;">'.$zpr['inclusive'].'</span>
-		<span class="ZP_STYLE ZP_ATTR" style="display:none;">'.$zpr['style'].'</span>
-		<span class="ZP_LIMIT ZP_ATTR" style="display:none;">'.$zpr['limit'].'</span>
-		<span class="ZP_LOADMORE ZP_ATTR" style="display:none;">'.$zpr['loadmore'].'</span>
-		<span class="ZP_INITIAL ZP_ATTR" style="display:none;">'.$zpr['initial'].'</span>
-		<span class="ZP_SORTBY ZP_ATTR" style="display:none;">'.$zpr['sortby'].'</span>
-		<span class="ZP_ORDER ZP_ATTR" style="display:none;">'.$zpr['order'].'</span>
-		<span class="ZP_TITLE ZP_ATTR" style="display:none;">'.$zpr['title'].'</span>
-		<span class="ZP_SHOWIMAGE ZP_ATTR" style="display:none;">'.$zpr['showimage'].'</span>
-		<span class="ZP_SHOWTAGS ZP_ATTR" style="display:none;">'.$zpr['showtags'].'</span>
-		<span class="ZP_DOWNLOADABLE ZP_ATTR" style="display:none;">'.$zpr['downloadable'].'</span>
-		<span class="ZP_NOTES ZP_ATTR" style="display:none;">'.$zpr['shownotes'].'</span>
-		<span class="ZP_ABSTRACT ZP_ATTR" style="display:none;">'.$zpr['showabstracts'].'</span>
-		<span class="ZP_CITEABLE ZP_ATTR" style="display:none;">'.$zpr['citeable'].'</span>
-		<span class="ZP_TARGET ZP_ATTR" style="display:none;">'.$zpr['target'].'</span>
-		<span class="ZP_URLWRAP ZP_ATTR" style="display:none;">'.$zpr['urlwrap'].'</span>
-		<span class="ZP_FORCENUM ZP_ATTR" style="display:none;">'.$zpr['forcenumber'].'</span>
-        <span class="ZP_HIGHLIGHT ZP_ATTR" style="display:none;">'.$zpr['highlight'].'</span>
-        <span class="ZP_POSTID ZP_ATTR" style="display:none;">'.$post->ID.'</span>
-		<span class="ZOTPRESS_PLUGIN_URL ZP_ATTR" style="display:none;">'.ZOTPRESS_PLUGIN_URL.'</span>
+		<span class="ZP_API_USER_ID ZP_ATTR">'.$zpr["api_user_id"].'</span>
+		<span class="ZP_ITEM_KEY ZP_ATTR">'.$zpr['item_key'].'</span>
+		<span class="ZP_COLLECTION_ID ZP_ATTR">'.$zpr['collection_id'].'</span>
+		<span class="ZP_TAG_ID ZP_ATTR">'.$zpr['tag_id'].'</span>
+		<span class="ZP_AUTHOR ZP_ATTR">'.$zpr['author'].'</span>
+		<span class="ZP_YEAR ZP_ATTR">'.$zpr['year'].'</span>
+        <span class="ZP_ITEMTYPE ZP_ATTR">'.$zpr['itemtype'].'</span>
+		<span class="ZP_INCLUSIVE ZP_ATTR">'.$zpr['inclusive'].'</span>
+		<span class="ZP_STYLE ZP_ATTR">'.$zpr['style'].'</span>
+		<span class="ZP_LIMIT ZP_ATTR">'.$zpr['limit'].'</span>
+		<span class="ZP_SORTBY ZP_ATTR">'.$zpr['sortby'].'</span>
+		<span class="ZP_ORDER ZP_ATTR">'.$zpr['order'].'</span>
+		<span class="ZP_TITLE ZP_ATTR">'.$zpr['title'].'</span>
+		<span class="ZP_SHOWIMAGE ZP_ATTR">'.$zpr['showimage'].'</span>
+		<span class="ZP_SHOWTAGS ZP_ATTR">'.$zpr['showtags'].'</span>
+		<span class="ZP_DOWNLOADABLE ZP_ATTR">'.$zpr['downloadable'].'</span>
+		<span class="ZP_NOTES ZP_ATTR">'.$zpr['shownotes'].'</span>
+		<span class="ZP_ABSTRACT ZP_ATTR">'.$zpr['showabstracts'].'</span>
+		<span class="ZP_CITEABLE ZP_ATTR">'.$zpr['citeable'].'</span>
+		<span class="ZP_TARGET ZP_ATTR">'.$zpr['target'].'</span>
+		<span class="ZP_URLWRAP ZP_ATTR">'.$zpr['urlwrap'].'</span>
+		<span class="ZP_FORCENUM ZP_ATTR">'.$zpr['forcenumber'].'</span>
+        <span class="ZP_HIGHLIGHT ZP_ATTR">'.$zpr['highlight'].'</span>
+        <span class="ZP_POSTID ZP_ATTR">'.$post->ID.'</span>
+		<span class="ZOTPRESS_PLUGIN_URL ZP_ATTR">'.ZOTPRESS_PLUGIN_URL.'</span>
 
 		<div class="zp-List loading">';
 

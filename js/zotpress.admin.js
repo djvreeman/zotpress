@@ -533,6 +533,78 @@ jQuery(document).ready( function()
 
 
 
+    /*
+
+        SET CACHE TIMER
+
+    */
+
+	jQuery("#zp-Zotpress-Options-CacheTimer-Button").click(function()
+	{
+		var $this = jQuery(this);
+
+		// Determine if using existing or adding new
+        // If adding new, also update Zotpress_StyleList option
+		// Get all post types
+		var zpTempCacheTimer = jQuery("select#zp-Zotpress-Options-CacheTimer option:selected").val();
+
+		if ( zpTempCacheTimer != "" )
+		{
+			// Prep for data validation
+			jQuery(this).attr('disabled','true');
+			jQuery('#zp-Zotpress-Options-CacheTimer .zp-Loading').show();
+
+			// AJAX
+			jQuery.ajax(
+			{
+				url: zpAccountsAJAX.ajaxurl,
+				data: {
+					'action': 'zpAccountsViaAJAX',
+					'action_type': 'default_cachetimer',
+					'cache_timer': zpTempCacheTimer,
+					'zpAccountsAJAX_nonce': zpAccountsAJAX.zpAccountsAJAX_nonce
+				},
+				xhrFields: {
+					withCredentials: true
+				},
+				success: function(xml)
+				{
+					var $result = jQuery('result', xml).attr('success');
+
+					jQuery('#zp-Zotpress-Options-CacheTimer .zp-Loading').hide();
+					jQuery('input#zp-Zotpress-Options-CacheTimer-Button').removeAttr('disabled');
+
+					if ($result == "true")
+					{
+						jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Errors').hide();
+						jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Success').show();
+
+						jQuery.doTimeout(1000,function() {
+							jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Success').hide();
+						});
+					}
+					else // Show errors
+					{
+						jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Errors').html("<p>"+jQuery('errors', xml).text()+"</p>\n");
+						jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Errors').show();
+					}
+				},
+				error: function(errorThrown)
+				{
+					console.log(errorThrown);
+				}
+			});
+		}
+		else // Show errors
+		{
+			jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Errors').html("No option was selected.\n");
+			jQuery('#zp-Zotpress-Options-CacheTimer div.zp-Errors').show();
+		}
+
+		// Cancel default behaviours
+		return false;
+
+	});
 
 
 
